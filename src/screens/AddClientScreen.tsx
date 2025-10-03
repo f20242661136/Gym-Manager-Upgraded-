@@ -8,30 +8,69 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '../services/api';
 import { Client } from '../types';
+import { pickImage, takePhoto } from '../utils/imagePicker';
+import { useNetworkStatus } from '../hook/useNetworkStatus';
 
-const AddClientScreen: React.FC = () => {
+interface AddClientScreenProps {
+  route?: any;
+}
+
+const AddClientScreen: React.FC<AddClientScreenProps> = ({ route }) => {
   const navigation = useNavigation();
+  const isEditing = route?.params?.isEditing;
+  const existingClient = route?.params?.client;
+  const isConnected = useNetworkStatus();
+
   const [isLoading, setIsLoading] = useState(false);
+  const [photoUri, setPhotoUri] = useState(existingClient?.photoUrl || '');
   
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    age: '',
-    gender: '',
-    weight: '',
-    height: '',
-    chest: '',
-    waist: '',
+    name: existingClient?.name || '',
+    phone: existingClient?.phone || '',
+    email: existingClient?.email || '',
+    age: existingClient?.age?.toString() || '',
+    gender: existingClient?.gender || '',
+    weight: existingClient?.weight?.toString() || '',
+    height: existingClient?.height?.toString() || '',
+    chest: existingClient?.chest?.toString() || '',
+    waist: existingClient?.waist?.toString() || '',
   });
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleImagePick = async () => {
+    Alert.alert(
+      'Add Photo',
+      'Choose an option',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const uri = await takePhoto();
+            if (uri) setPhotoUri(uri);
+          },
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const uri = await pickImage();
+            if (uri) setPhotoUri(uri);
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
   const calculateBMI = (weight: number, height: number): number => {
@@ -39,54 +78,114 @@ const AddClientScreen: React.FC = () => {
     return weight / (heightInMeters * heightInMeters);
   };
 
-  const handleSubmit = async () => {
-    // Basic validation
-    if (!formData.name || !formData.phone || !formData.email) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
+  const weightNum = parseFloat(formData.weight) || 0;
+  const heightNum = parseFloat(formData.height) || 0;
+  const bmi = weightNum > 0 && heightNum > 0 ? calculateBMI(weightNum, heightNum).toFixed(1) : '';
 
-    setIsLoading(true);
-
-    try {
-      const weight = parseFloat(formData.weight) || 0;
-      const height = parseFloat(formData.height) || 0;
-      const bmi = calculateBMI(weight, height);
-
-      const newClient: Omit<Client, 'id'> = {
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        age: parseInt(formData.age) || 0,
-        gender: formData.gender,
-        weight: weight,
-        height: height,
-        chest: parseFloat(formData.chest) || 0,
-        waist: parseFloat(formData.waist) || 0,
-        bmi: bmi,
-        photoUrl: '',
-        membershipStatus: 'Unpaid',
-        registrationDate: new Date().toISOString().split('T')[0],
-      };
-
-      await api.addClient(newClient);
-      Alert.alert('Success', 'Client added successfully!');
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add client');
-    } finally {
-      setIsLoading(false);
-    }
+  const validateForm = (): string | null => {
+    if (!formData.name.trim()) return 'Name is required';
+    if (!formData.phone.trim()) return 'Phone number is required';
+    if (!formData.email.trim()) return 'Email is required';
+    if (!formData.email.includes('@')) return 'Please enter a valid email';
+    
+    const age = parseInt(formData.age);
+    if (age && (age < 15 || age > 100)) return 'Please enter a valid age (15-100)';
+    
+    const weight = parseFloat(formData.weight);
+    if (weight && (weight < 30 || weight > 200)) return 'Please enter a valid weight (30-200 kg)';
+    
+    const height = parseFloat(formData.height);
+    if (height && (height < 100 || height > 250)) return 'Please enter a valid height (100-250 cm)';
+    
+    return null;
   };
+
+  // In handleSubmit function, after validation:
+const handleSubmit = async () => {
+  const validationError = validateForm();
+  if (validationError) {
+    Alert.alert('Validation Error', validationError);
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    let finalPhotoUrl = photoUri;
+
+    // Upload image if a new one was selected
+    if (photoUri && !photoUri.startsWith('http')) {
+      const fileName = `client_${Date.now()}.jpg`;
+      finalPhotoUrl = await api.uploadImage(photoUri, fileName);
+    }
+
+    const weight = parseFloat(formData.weight) || 0;
+    const height = parseFloat(formData.height) || 0;
+    const bmi = calculateBMI(weight, height);
+
+    const clientData: Omit<Client, 'id'> = {
+      name: formData.name.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim(),
+      age: parseInt(formData.age) || 0,
+      gender: formData.gender.trim(),
+      weight: weight,
+      height: height,
+      chest: parseFloat(formData.chest) || 0,
+      waist: parseFloat(formData.waist) || 0,
+      bmi: bmi,
+      photoUrl: finalPhotoUrl,
+      membershipStatus: existingClient?.membershipStatus || 'Unpaid',
+      registrationDate: existingClient?.registrationDate || new Date().toISOString().split('T')[0],
+      membershipDueDate: existingClient?.membershipDueDate || '',
+    };
+
+    if (isEditing && existingClient) {
+      await api.updateClient(existingClient.id, { ...clientData, id: existingClient.id }, isConnected);
+      Alert.alert('Success', 'Client updated successfully!');
+    } else {
+      await api.addClient(clientData, isConnected);
+      Alert.alert('Success', 'Client added successfully!');
+    }
+    
+    navigation.goBack();
+  } catch (error) {
+    Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'add'} client`);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Add New Client</Text>
-        <Text style={styles.subtitle}>Enter client information</Text>
+
+      {/* Photo Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Profile Photo</Text>
+        <View style={styles.photoContainer}>
+          <TouchableOpacity style={styles.photoButton} onPress={handleImagePick}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.clientPhoto} />
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <Ionicons name="camera" size={32} color="#6B7280" />
+                <Text style={styles.photoText}>Add Photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {photoUri && (
+            <TouchableOpacity 
+              style={styles.removePhotoButton}
+              onPress={() => setPhotoUri('')}
+            >
+              <Ionicons name="close-circle" size={24} color="#EF4444" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* Personal Information */}
+      {/* Rest of the form remains the same... */}
+      {/* Personal Information Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Personal Information</Text>
         
@@ -147,7 +246,7 @@ const AddClientScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Body Measurements */}
+      {/* Body Measurements Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Body Measurements</Text>
         
@@ -174,6 +273,13 @@ const AddClientScreen: React.FC = () => {
             />
           </View>
         </View>
+
+        {bmi ? (
+          <View style={styles.bmiContainer}>
+            <Text style={styles.bmiLabel}>Calculated BMI:</Text>
+            <Text style={styles.bmiValue}>{bmi}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
@@ -209,7 +315,9 @@ const AddClientScreen: React.FC = () => {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.submitButtonText}>Add Client</Text>
+          <Text style={styles.submitButtonText}>
+            {isEditing ? 'Update Client' : 'Add Client'}
+          </Text>
         )}
       </TouchableOpacity>
     </ScrollView>
@@ -219,37 +327,30 @@ const AddClientScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F9FAFB',
+    padding: 16,
   },
   header: {
-    padding: 24,
-    paddingBottom: 16,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
-    marginTop: 4,
+    textAlign: 'center',
   },
   section: {
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#1F2937',
     marginBottom: 16,
   },
@@ -258,9 +359,9 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
@@ -268,17 +369,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: 'white',
+    backgroundColor: '#FFFFFF',
   },
   row: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   submitButton: {
-    backgroundColor: '#6366F1',
-    margin: 16,
+    backgroundColor: '#3B82F6',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
+    marginTop: 24,
     marginBottom: 32,
   },
   submitButtonDisabled: {
@@ -288,6 +390,57 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  photoContainer: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  photoButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  clientPhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+  },
+  photoText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 0,
+    right: 80,
+    backgroundColor: 'white',
+    borderRadius: 12,
+  },
+  bmiContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  bmiLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  bmiValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6366F1',
   },
 });
 

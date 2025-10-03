@@ -8,17 +8,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
 
-interface LoginScreenProps {
-  onLogin: () => void;
-}
-
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { signIn } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -27,13 +26,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     }
 
     setIsLoading(true);
-    
-    // Simulate login process
-    setTimeout(() => {
+
+    try {
+      await signIn(email, password);
+    } catch (error: any) {
+      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+    } finally {
       setIsLoading(false);
-      // For demo, we'll just log in with any credentials
-      onLogin();
-    }, 1500);
+    }
   };
 
   return (
@@ -42,7 +42,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.logoContainer}>
-        <Ionicons name="barbell" size={80} color="#6366F1" />
+        <Image source={require('../../assets/logo.jpeg')} style={styles.logoImage} />
         <Text style={styles.title}>Gym Manager</Text>
         <Text style={styles.subtitle}>Manage your gym with ease</Text>
       </View>
@@ -78,7 +78,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         </TouchableOpacity>
 
         <Text style={styles.demoText}>
-          Demo: Enter any email and password to login
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -101,6 +100,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
     marginTop: 16,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
   },
   subtitle: {
     fontSize: 16,

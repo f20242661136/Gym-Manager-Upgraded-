@@ -6,24 +6,37 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { RootTabParamList } from '../types/navigation';
 import { api } from '../services/api';
-import { DashboardStats } from '../types';
+import { DashboardStats, Client, Payment } from '../types';
 
 const DashboardScreen: React.FC = () => {
+  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     paidClients: 0,
     unpaidClients: 0,
   });
+  const [recentClients, setRecentClients] = useState<Client[]>([]);
+  const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboardData = async () => {
     try {
-      const dashboardStats = await api.getDashboardStats();
+      const [dashboardStats, clients, payments] = await Promise.all([
+        api.getDashboardStats(),
+        api.getRecentClients(),
+        api.getRecentPayments(),
+      ]);
       setStats(dashboardStats);
+      setRecentClients(clients);
+      setRecentPayments(payments);
     } catch (error) {
       Alert.alert('Error', 'Failed to load dashboard data');
     } finally {
@@ -56,10 +69,6 @@ const DashboardScreen: React.FC = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Dashboard</Text>
-        <Text style={styles.headerSubtitle}>Welcome back, Manager!</Text>
-      </View>
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
@@ -91,43 +100,55 @@ const DashboardScreen: React.FC = () => {
       {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsContainer}>
-          <View style={styles.actionItem}>
+      <View style={styles.actionsContainer}>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Clients', { screen: 'AddClient', params: {} })}>
             <Ionicons name="person-add" size={32} color="#6366F1" />
             <Text style={styles.actionText}>Add Client</Text>
-          </View>
-          <View style={styles.actionItem}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Payments', { screen: 'PaymentsList', params: {} })}>
             <Ionicons name="card" size={32} color="#10B981" />
             <Text style={styles.actionText}>Record Payment</Text>
-          </View>
-          <View style={styles.actionItem}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Notifications')}>
             <Ionicons name="notifications" size={32} color="#F59E0B" />
             <Text style={styles.actionText}>Reminders</Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Recent Activity */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <View style={styles.activityItem}>
-          <View style={styles.activityIcon}>
-            <Ionicons name="person-add" size={20} color="#10B981" />
-          </View>
-          <View style={styles.activityContent}>
-            <Text style={styles.activityTitle}>New client registered</Text>
-            <Text style={styles.activityTime}>2 hours ago</Text>
-          </View>
-        </View>
-        <View style={styles.activityItem}>
-          <View style={styles.activityIcon}>
-            <Ionicons name="card" size={20} color="#6366F1" />
-          </View>
-          <View style={styles.activityContent}>
-            <Text style={styles.activityTitle}>Payment received from John Doe</Text>
-            <Text style={styles.activityTime}>5 hours ago</Text>
-          </View>
-        </View>
+        {recentClients.map(client => (
+          <TouchableOpacity
+            key={client.id}
+            style={styles.activityItem}
+            onPress={() => navigation.navigate('Clients', { screen: 'ClientDetail', params: { clientId: client.id } })}
+          >
+            <View style={styles.activityIcon}>
+              <Ionicons name="person-add" size={20} color="#10B981" />
+            </View>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>New client registered: {client.name}</Text>
+              <Text style={styles.activityTime}>{new Date(client.registrationDate).toLocaleDateString()}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+        {recentPayments.map(payment => (
+          <TouchableOpacity
+            key={payment.id}
+            style={styles.activityItem}
+            onPress={() => navigation.navigate('Payments', { screen: 'PaymentsList', params: { clientId: payment.clientId, clientName: payment.clientName } })}
+          >
+            <View style={styles.activityIcon}>
+              <Ionicons name="card" size={20} color="#6366F1" />
+            </View>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Payment received from {payment.clientName}</Text>
+              <Text style={styles.activityTime}>{new Date(payment.paymentDate).toLocaleDateString()}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
       </View>
     </ScrollView>
   );

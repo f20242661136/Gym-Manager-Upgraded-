@@ -61,11 +61,11 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({ navigation }) => {
   };
 
   const handleClientPress = (client: Client) => {
-    navigation.navigate('ClientDetail', { clientId: client.id });
+    navigation.navigate('Clients', { screen: 'ClientDetail', params: { clientId: client.id } });
   };
 
   const handleAddClient = () => {
-    navigation.navigate('AddClient');
+    navigation.navigate('Clients', { screen: 'AddClient' });
   };
 
   if (isLoading) {

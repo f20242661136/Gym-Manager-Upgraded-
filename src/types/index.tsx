@@ -13,6 +13,7 @@ export interface Client {
   photoUrl: string;
   membershipStatus: 'Paid' | 'Unpaid';
   registrationDate: string;
+  membershipDueDate?: string;
 }
 
 export interface Payment {
