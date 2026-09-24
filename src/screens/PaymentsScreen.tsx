@@ -55,8 +55,9 @@ const PaymentsScreen: React.FC = () => {
     }
 
     if (filter === 'due') {
-      const today = new Date().toISOString().split('T')[0];
-      filtered = filtered.filter(payment => payment.dueDate <= today);
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      filtered = filtered.filter(payment => payment.dueDate <= todayStr);
     }
 
     return filtered;
@@ -90,7 +91,11 @@ const PaymentsScreen: React.FC = () => {
             <Text style={styles.dateLabel}>Due</Text>
             <Text style={[
               styles.dateValue,
-              payment.dueDate <= new Date().toISOString().split('T')[0] && styles.overdueDate
+              (() => {
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                return payment.dueDate <= todayStr && styles.overdueDate;
+              })()
             ]}>
               {payment.dueDate}
             </Text>

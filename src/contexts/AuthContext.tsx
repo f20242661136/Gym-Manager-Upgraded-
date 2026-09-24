@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface User {
   id: string;
@@ -11,6 +10,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -28,60 +28,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Check for existing session
-    checkUser();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-          });
-          // Store session
-          await AsyncStorage.setItem('session', JSON.stringify(session));
-        } else {
-          setUser(null);
-          await AsyncStorage.removeItem('session');
-        }
-        setIsLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const sessionStr = await AsyncStorage.getItem('session');
-      if (sessionStr) {
-        const session = JSON.parse(sessionStr);
-        const { data: { user }, error } = await supabase.auth.setSession(session);
-        if (user && !error) {
-          setUser({
-            id: user.id,
-            email: user.email || '',
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error checking user session:', error);
-    } finally {
-      setIsLoading(false);
+  const syncUserFromSession = (session: any) => {
+    if (session?.user) {
+      setUser({
+        id: session.user.id,
+        email: session.user.email || '',
+      });
+      return;
     }
+
+    setUser(null);
   };
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+
+        if (error) {
+          console.error('Auth session lookup failed:', error.message);
+          setUser(null);
+        } else {
+          syncUserFromSession(session);
+        }
+      } catch (error) {
+        console.error('Unexpected auth session error:', error);
+        setUser(null);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      syncUserFromSession(session);
+      setIsLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
+    const normalizedEmail = email.trim();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
       password,
     });
 
     if (error) {
       throw error;
     }
+
+    syncUserFromSession(data.session);
+  };
+
+  const signUp = async (email: string, password: string) => {
+    const normalizedEmail = email.trim();
+
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    syncUserFromSession(data.session);
   };
 
   const signOut = async () => {
@@ -89,14 +118,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       throw error;
     }
+    setUser(null);
   };
 
-  const value = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     isLoading,
     signIn,
+    signUp,
     signOut,
-  };
+  }), [user, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

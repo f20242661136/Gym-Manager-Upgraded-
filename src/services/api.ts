@@ -2,14 +2,43 @@ import { supabase } from './supabase';
 import { Client, Payment, DashboardStats } from '../types/index';
 import { storage } from './storage';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
+import { getCurrentGymId } from './gymService';
+
+const shouldFallbackToLocalStorage = (isConnected: boolean | undefined, error: any): boolean => {
+  if (typeof isConnected === 'boolean') {
+    return !isConnected;
+  }
+
+  if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+    return !navigator.onLine;
+  }
+
+  const message = String(error?.message ?? '').toLowerCase();
+  return message.includes('offline') || message.includes('network') || message.includes('fetch');
+};
+
+const toNullableTimestamp = (value?: string | null): string | null => {
+  const trimmedValue = value?.trim();
+  return trimmedValue ? trimmedValue : null;
+};
+
+const requireActiveGymId = async (): Promise<string> => {
+  const activeGymId = await getCurrentGymId();
+  if (!activeGymId) {
+    throw new Error('No active gym selected.');
+  }
+  return activeGymId;
+};
 
 export const api = {
   // Client APIs
   getClients: async (): Promise<Client[]> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { data, error } = await supabase
         .from('clients')
         .select('*')
+        .eq('gym_id', activeGymId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -46,10 +75,12 @@ export const api = {
 
   getClient: async (id: string): Promise<Client | undefined> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('id', id)
+        .eq('gym_id', activeGymId)
         .single();
 
       if (error) throw error;
@@ -80,8 +111,11 @@ export const api = {
 
   addClient: async (client: Omit<Client, 'id'>, isConnected: boolean): Promise<Client> => {
     try {
+      const activeGymId = await requireActiveGymId();
+
       // Convert to snake_case for Supabase
       const clientData = {
+        gym_id: activeGymId,
         name: client.name,
         phone: client.phone,
         email: client.email,
@@ -95,7 +129,7 @@ export const api = {
         photo_url: client.photoUrl,
         membership_status: client.membershipStatus,
         registration_date: client.registrationDate,
-        membership_due_date: client.membershipDueDate,
+        membership_due_date: toNullableTimestamp(client.membershipDueDate),
       };
 
       const { data, error } = await supabase
@@ -132,6 +166,9 @@ export const api = {
       return newClient;
     } catch (error) {
       console.error('Error adding client:', error);
+      if (!shouldFallbackToLocalStorage(isConnected, error)) {
+        throw error;
+      }
       // Save locally if online fails
       const clients = await storage.getClients();
       const newClient: Client = {
@@ -146,6 +183,7 @@ export const api = {
 
   updateClient: async (id: string, client: Client, isConnected: boolean): Promise<Client> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const clientData = {
         name: client.name,
         phone: client.phone,
@@ -160,13 +198,14 @@ export const api = {
         photo_url: client.photoUrl,
         membership_status: client.membershipStatus,
         registration_date: client.registrationDate,
-        membership_due_date: client.membershipDueDate,
+        membership_due_date: toNullableTimestamp(client.membershipDueDate),
       };
 
       const { data, error } = await supabase
         .from('clients')
         .update(clientData)
         .eq('id', id)
+        .eq('gym_id', activeGymId)
         .select()
         .single();
 
@@ -201,6 +240,9 @@ export const api = {
       return updatedClient;
     } catch (error) {
       console.error('Error updating client:', error);
+      if (!shouldFallbackToLocalStorage(isConnected, error)) {
+        throw error;
+      }
       // Update locally if online fails
       const clients = await storage.getClients();
       const index = clients.findIndex(c => c.id === id);
@@ -214,10 +256,12 @@ export const api = {
 
   deleteClient: async (id: string): Promise<void> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { error } = await supabase
         .from('clients')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('gym_id', activeGymId);
 
       if (error) throw error;
 
@@ -227,6 +271,9 @@ export const api = {
       await storage.saveClients(filteredClients);
     } catch (error) {
       console.error('Error deleting client:', error);
+      if (!shouldFallbackToLocalStorage(undefined, error)) {
+        throw error;
+      }
       // Delete locally if online fails
       const clients = await storage.getClients();
       const filteredClients = clients.filter(client => client.id !== id);
@@ -237,9 +284,11 @@ export const api = {
   // Payment APIs
   getPayments: async (clientId?: string): Promise<Payment[]> => {
     try {
+      const activeGymId = await requireActiveGymId();
       let query = supabase
         .from('payments')
         .select('*')
+        .eq('gym_id', activeGymId)
         .order('created_at', { ascending: false });
 
       if (clientId) {
@@ -258,6 +307,7 @@ export const api = {
         paymentDate: item.payment_date,
         dueDate: item.due_date,
         status: item.status,
+        duration: item.duration || 1,
       })) || [];
 
       // Cache for offline use
@@ -277,13 +327,16 @@ export const api = {
 
   addPayment: async (payment: Omit<Payment, 'id'>, isConnected: boolean): Promise<Payment> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const paymentData = {
+        gym_id: activeGymId,
         client_id: payment.clientId,
         client_name: payment.clientName,
         amount: payment.amount,
         payment_date: payment.paymentDate,
         due_date: payment.dueDate,
         status: payment.status,
+        duration: payment.duration,
       };
 
       const { data, error } = await supabase
@@ -302,6 +355,7 @@ export const api = {
         paymentDate: data.payment_date,
         dueDate: data.due_date,
         status: data.status,
+        duration: data.duration || 1,
       };
 
       // Update client membership status
@@ -311,7 +365,8 @@ export const api = {
           membership_status: 'Paid',
           membership_due_date: payment.dueDate,
         })
-        .eq('id', payment.clientId);
+        .eq('id', payment.clientId)
+        .eq('gym_id', activeGymId);
 
       // Update local cache
       const payments = await storage.getPayments();
@@ -330,6 +385,9 @@ export const api = {
       return newPayment;
     } catch (error) {
       console.error('Error adding payment:', error);
+      if (!shouldFallbackToLocalStorage(isConnected, error)) {
+        throw error;
+      }
       // Save locally if online fails
       const payments = await storage.getPayments();
       const newPayment: Payment = {
@@ -355,9 +413,11 @@ export const api = {
   // Dashboard APIs
   getDashboardStats: async (): Promise<DashboardStats> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { data: clients, error } = await supabase
         .from('clients')
-        .select('membership_status');
+        .select('membership_status')
+        .eq('gym_id', activeGymId);
 
       if (error) throw error;
 
@@ -403,9 +463,12 @@ export const api = {
       }
 
       // Upload to Supabase Storage
+      const activeGymId = await requireActiveGymId();
+      const storagePath = `gyms/${activeGymId}/client-photos/${fileName}`;
+
       const { data, error } = await supabase.storage
         .from('client-photos')
-        .upload(fileName, bytes, {
+        .upload(storagePath, bytes, {
           contentType: 'image/jpeg',
           upsert: true,
         });
@@ -415,11 +478,14 @@ export const api = {
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('client-photos')
-        .getPublicUrl(fileName);
+        .getPublicUrl(storagePath);
 
       return publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
+      if (!shouldFallbackToLocalStorage(undefined, error)) {
+        throw error;
+      }
       // Return the local URI as fallback
       return uri;
     }
@@ -428,9 +494,11 @@ export const api = {
   // Get recent clients (last 5)
   getRecentClients: async (): Promise<Client[]> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { data, error } = await supabase
         .from('clients')
         .select('*')
+        .eq('gym_id', activeGymId)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -466,9 +534,11 @@ export const api = {
   // Get recent payments (last 5)
   getRecentPayments: async (): Promise<Payment[]> => {
     try {
+      const activeGymId = await requireActiveGymId();
       const { data, error } = await supabase
         .from('payments')
         .select('*')
+        .eq('gym_id', activeGymId)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -482,6 +552,7 @@ export const api = {
         paymentDate: item.payment_date,
         dueDate: item.due_date,
         status: item.status,
+        duration: item.duration || 1,
       })) || [];
 
       return payments;

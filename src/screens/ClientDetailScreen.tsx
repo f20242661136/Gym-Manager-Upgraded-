@@ -17,6 +17,14 @@ import type { RootTabParamList, ClientStackParamList } from '../types/navigation
 import { api } from '../services/api';
 import { Client, Payment } from '../types';
 
+const formatMeasurement = (value: number | null | undefined, decimals = 0): string => {
+  if (value == null) {
+    return '-';
+  }
+
+  return decimals > 0 ? value.toFixed(decimals) : String(value);
+};
+
 const ClientDetailScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootTabParamList>>();
   const route = useRoute<RouteProp<ClientStackParamList, 'ClientDetail'>>();
@@ -210,27 +218,27 @@ const ClientDetailScreen: React.FC = () => {
 
           <View style={styles.measurementsGrid}>
             <View style={styles.measurementItem}>
-              <Text style={styles.measurementValue}>{client.weight} kg</Text>
+              <Text style={styles.measurementValue}>{formatMeasurement(client.weight)} kg</Text>
               <Text style={styles.measurementLabel}>Weight</Text>
             </View>
 
             <View style={styles.measurementItem}>
-              <Text style={styles.measurementValue}>{client.height} cm</Text>
+              <Text style={styles.measurementValue}>{formatMeasurement(client.height)} cm</Text>
               <Text style={styles.measurementLabel}>Height</Text>
             </View>
 
             <View style={styles.measurementItem}>
-              <Text style={styles.measurementValue}>{client.bmi.toFixed(1)}</Text>
+              <Text style={styles.measurementValue}>{formatMeasurement(client.bmi, 1)}</Text>
               <Text style={styles.measurementLabel}>BMI</Text>
             </View>
 
             <View style={styles.measurementItem}>
-              <Text style={styles.measurementValue}>{client.chest} cm</Text>
+              <Text style={styles.measurementValue}>{formatMeasurement(client.chest)} cm</Text>
               <Text style={styles.measurementLabel}>Chest</Text>
             </View>
 
             <View style={styles.measurementItem}>
-              <Text style={styles.measurementValue}>{client.waist} cm</Text>
+              <Text style={styles.measurementValue}>{formatMeasurement(client.waist)} cm</Text>
               <Text style={styles.measurementLabel}>Waist</Text>
             </View>
           </View>
@@ -255,7 +263,7 @@ const ClientDetailScreen: React.FC = () => {
             payments.map((payment) => (
               <View key={payment.id} style={styles.paymentItem}>
                 <View style={styles.paymentInfo}>
-                  <Text style={styles.paymentAmount}>${payment.amount}</Text>
+                  <Text style={styles.paymentAmount}>Rs. {payment.amount}</Text>
                   <Text style={styles.paymentDate}>{payment.paymentDate}</Text>
                 </View>
                 <View style={[

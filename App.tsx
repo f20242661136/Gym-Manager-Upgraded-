@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import AppNavigator from './src/navigation/AppNavigator';
 import { notificationService } from './src/services/notifications';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { GymProvider } from './src/contexts/GymContext';
 
 export default function App() {
   const notificationListener = useRef<Notifications.Subscription | null>(null);
@@ -68,8 +69,10 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="auto" />
-          <AppNavigator />
+          <GymProvider>
+            <StatusBar style="auto" />
+            <AppNavigator />
+          </GymProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

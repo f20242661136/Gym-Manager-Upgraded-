@@ -16,5 +16,7 @@ export type RootTabParamList = {
   Clients: NavigatorScreenParams<ClientStackParamList>;
   Payments: NavigatorScreenParams<PaymentStackParamList>;
   Notifications: undefined;
+  GymManagement: undefined;
+  JoinGym: undefined;
   Settings: undefined;
 };

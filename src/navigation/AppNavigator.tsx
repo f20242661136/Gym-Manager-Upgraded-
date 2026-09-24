@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -13,8 +14,12 @@ import AddPaymentScreen from '../screens/AddPaymentScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import GymSetupScreen from '../screens/GymSetupScreen';
+import GymManagementScreen from '../screens/GymManagementScreen';
+import JoinGymScreen from '../screens/JoinGymScreen';
 
 import { useAuth } from '../contexts/AuthContext';
+import { useGym } from '../contexts/GymContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -118,10 +123,22 @@ const MainTabs = () => (
 
 const AppNavigator = () => {
   const { user, isLoading } = useAuth();
+  const { activeGym, isLoading: gymsLoading } = useGym();
 
-  if (isLoading) {
-    // You can return a splash screen or loading indicator here
-    return null;
+  if (isLoading || gymsLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading gym access...</Text>
+      </View>
+    );
+  }
+
+  if (user && !activeGym) {
+    return (
+      <NavigationContainer>
+        <GymSetupScreen />
+      </NavigationContainer>
+    );
   }
 
   return (
@@ -130,5 +147,19 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '600',
+  },
+});
 
 export default AppNavigator;

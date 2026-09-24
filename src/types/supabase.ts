@@ -9,9 +9,77 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      gyms: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          logo_url: string | null
+          phone: string | null
+          email: string | null
+          address: string | null
+          status: 'active' | 'inactive' | 'suspended'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          logo_url?: string | null
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          status?: 'active' | 'inactive' | 'suspended'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          logo_url?: string | null
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          status?: 'active' | 'inactive' | 'suspended'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      gym_users: {
+        Row: {
+          id: string
+          gym_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'manager' | 'staff' | 'trainer' | 'receptionist'
+          status: 'active' | 'pending' | 'inactive'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          gym_id: string
+          user_id: string
+          role?: 'owner' | 'admin' | 'manager' | 'staff' | 'trainer' | 'receptionist'
+          status?: 'active' | 'pending' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          gym_id?: string
+          user_id?: string
+          role?: 'owner' | 'admin' | 'manager' | 'staff' | 'trainer' | 'receptionist'
+          status?: 'active' | 'pending' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+      }
       clients: {
         Row: {
           id: string
+          gym_id: string
           created_at: string
           name: string
           phone: string
@@ -30,6 +98,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          gym_id: string
           created_at?: string
           name: string
           phone: string
@@ -48,6 +117,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          gym_id?: string
           created_at?: string
           name?: string
           phone?: string
@@ -68,6 +138,7 @@ export interface Database {
       payments: {
         Row: {
           id: string
+          gym_id: string
           created_at: string
           client_id: string
           client_name: string
@@ -75,9 +146,11 @@ export interface Database {
           payment_date: string
           due_date: string
           status: 'Paid' | 'Pending'
+          duration: number
         }
         Insert: {
           id?: string
+          gym_id: string
           created_at?: string
           client_id: string
           client_name: string
@@ -85,9 +158,11 @@ export interface Database {
           payment_date: string
           due_date: string
           status?: 'Paid' | 'Pending'
+          duration?: number
         }
         Update: {
           id?: string
+          gym_id?: string
           created_at?: string
           client_id?: string
           client_name?: string
@@ -95,6 +170,7 @@ export interface Database {
           payment_date?: string
           due_date?: string
           status?: 'Paid' | 'Pending'
+          duration?: number
         }
       }
     }

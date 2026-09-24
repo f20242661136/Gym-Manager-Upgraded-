@@ -123,6 +123,7 @@ const handleSubmit = async () => {
     const height = parseFloat(formData.height) || 0;
     const bmi = calculateBMI(weight, height);
 
+    const today = new Date();
     const clientData: Omit<Client, 'id'> = {
       name: formData.name.trim(),
       phone: formData.phone.trim(),
@@ -136,7 +137,7 @@ const handleSubmit = async () => {
       bmi: bmi,
       photoUrl: finalPhotoUrl,
       membershipStatus: existingClient?.membershipStatus || 'Unpaid',
-      registrationDate: existingClient?.registrationDate || new Date().toISOString().split('T')[0],
+      registrationDate: existingClient?.registrationDate || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
       membershipDueDate: existingClient?.membershipDueDate || '',
     };
 

@@ -27,6 +27,7 @@ async function run() {
       paymentDate: now,
       dueDate: now,
       status: 'Paid',
+      duration: 1,
     };
 
     const { data, error } = await supabase.from('payments').insert([payment]);

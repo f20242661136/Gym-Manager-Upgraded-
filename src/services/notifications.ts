@@ -8,18 +8,30 @@ import { Platform } from 'react-native';
 import { api } from './api';
 import { Client } from '../types/index';
 import { supabase } from './supabase';
+import { storage } from './storage';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowBanner: true,
     shouldShowList: true,
+    sound: 'default',
   }),
 });
 
 export const notificationService = {
+  // Check if notifications are enabled in settings
+  async areNotificationsEnabled(): Promise<boolean> {
+    try {
+      const storedValue = await storage.getItem('notificationsEnabled');
+      return storedValue !== 'false'; // Default to true if not set
+    } catch (error) {
+      console.error('Error checking notification setting:', error);
+      return true; // Default to enabled on error
+    }
+  },
+
   // create and log Android notification channel
   async ensureAndroidChannel() {
     if (Platform.OS !== 'android') return;
@@ -76,6 +88,8 @@ export const notificationService = {
   },
 
   async schedulePaymentReminder(clientId: string, clientName: string, dueDate: Date) {
+    if (!(await this.areNotificationsEnabled())) return;
+
     const seconds = Math.max(1, Math.floor((dueDate.getTime() - Date.now()) / 1000));
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -87,6 +101,46 @@ export const notificationService = {
       // use seconds trigger to be compatible with Expo's NotificationTriggerInput
       trigger: { seconds } as any,
     });
+  },
+
+  async schedulePaymentNotification(clientId: string, clientName: string, duration: number) {
+    if (!(await this.areNotificationsEnabled())) return;
+
+    const now = new Date();
+    const expiryDate = new Date(now);
+    expiryDate.setDate(expiryDate.getDate() + duration);
+
+    // Notification 1: 3 days before expiry or 1 day before if duration < 3
+    const notifyBeforeDays = duration < 3 ? 1 : 3;
+    const notifyBeforeDate = new Date(expiryDate);
+    notifyBeforeDate.setDate(expiryDate.getDate() - notifyBeforeDays);
+
+    if (notifyBeforeDate > now) {
+      const secondsBefore = Math.max(1, Math.floor((notifyBeforeDate.getTime() - Date.now()) / 1000));
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Membership Expiry Warning',
+          body: `Membership for ${clientName} will expire in ${notifyBeforeDays} day${notifyBeforeDays > 1 ? 's' : ''}.`,
+          sound: 'default',
+          data: { type: 'membership_expiry_warning', clientId },
+        },
+        trigger: { seconds: secondsBefore } as any,
+      });
+    }
+
+    // Notification 2: On expiry date
+    if (expiryDate > now) {
+      const secondsExpiry = Math.max(1, Math.floor((expiryDate.getTime() - Date.now()) / 1000));
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Membership Expired',
+          body: `Membership for ${clientName} has expired today.`,
+          sound: 'default',
+          data: { type: 'membership_expired', clientId },
+        },
+        trigger: { seconds: secondsExpiry } as any,
+      });
+    }
   },
 
   async checkMembershipExpirations() {
@@ -124,6 +178,8 @@ export const notificationService = {
   },
 
   async sendMembershipExpiredNotification(client: Client) {
+    if (!(await this.areNotificationsEnabled())) return;
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Membership Expired',
@@ -137,6 +193,8 @@ export const notificationService = {
 
   async scheduleMembershipExpiryReminders() {
     try {
+      if (!(await this.areNotificationsEnabled())) return;
+
       const clients = await api.getClients();
       const now = new Date();
 
@@ -179,6 +237,9 @@ export const notificationService = {
           }
         }
       }
+
+      // Schedule daily reminders for expired memberships
+      await this.scheduleDailyExpiredMembershipReminders();
     } catch (error) {
       console.error('Error scheduling membership expiry reminders:', error);
     }
@@ -193,7 +254,9 @@ export const notificationService = {
     try {
       // Example: listen to new payments inserted into `payments` table
       const paymentsChannel = supabase.channel('public:payments')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, (payload) => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, async (payload) => {
+          if (!(await this.areNotificationsEnabled())) return;
+
           const payment = payload.new as any;
           Notifications.scheduleNotificationAsync({
             content: {
@@ -209,7 +272,9 @@ export const notificationService = {
 
       // Example: listen to client membership updates (expiry)
       const clientsChannel = supabase.channel('public:clients')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload) => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, async (payload) => {
+          if (!(await this.areNotificationsEnabled())) return;
+
           const client = payload.new as any;
           if (payload.eventType === 'UPDATE' && client.membershipDueDate) {
             // You can decide what to notify on update
@@ -230,6 +295,61 @@ export const notificationService = {
     } catch (error) {
       console.error('Error subscribing to Supabase events', error);
       return null;
+    }
+  },
+
+  // Schedule daily reminders for expired memberships (when app is closed)
+  async scheduleDailyExpiredMembershipReminders() {
+    try {
+      if (!(await this.areNotificationsEnabled())) return;
+
+      // Cancel any existing daily expired membership reminders
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notification of scheduledNotifications) {
+        const type = notification.content.data?.type;
+        if (type === 'daily_expired_memberships') {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        }
+      }
+
+      const clients = await api.getClients();
+      const expiredCount = clients.filter(client =>
+        client.membershipDueDate &&
+        new Date(client.membershipDueDate) < new Date() &&
+        client.membershipStatus === 'Unpaid'
+      ).length;
+
+      if (expiredCount > 0) {
+        // Schedule daily reminder at 9 AM
+        const now = new Date();
+        const next9AM = new Date(now);
+        next9AM.setHours(9, 0, 0, 0);
+
+        // If it's already past 9 AM today, schedule for tomorrow
+        if (now >= next9AM) {
+          next9AM.setDate(next9AM.getDate() + 1);
+        }
+
+        const secondsUntilReminder = Math.max(1, Math.floor((next9AM.getTime() - now.getTime()) / 1000));
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Expired Memberships Reminder',
+            body: `You have ${expiredCount} client${expiredCount > 1 ? 's' : ''} with expired memberships. Please renew them.`,
+            sound: 'default',
+            data: { type: 'daily_expired_memberships', count: expiredCount },
+          },
+          trigger: {
+            seconds: secondsUntilReminder,
+            repeats: true,
+            // Schedule to repeat daily at 9 AM
+            hour: 9,
+            minute: 0,
+          } as any,
+        });
+      }
+    } catch (error) {
+      console.error('Error scheduling daily expired membership reminders:', error);
     }
   },
 
@@ -278,3 +398,5 @@ export const notificationService = {
 
   // Production: debug helpers removed
 };
+
+

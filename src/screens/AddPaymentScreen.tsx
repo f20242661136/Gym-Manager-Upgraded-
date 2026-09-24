@@ -17,26 +17,63 @@ import { useNetworkStatus } from '../hook/useNetworkStatus';
 import { notificationService } from '../services/notifications';
 
 const AddPaymentScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute();
   const { clientId, clientName } = route.params as { clientId: string; clientName: string };
   const isConnected = useNetworkStatus();
 
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [duration, setDuration] = useState(1); // duration in days
+  const [currentMembershipExpiry, setCurrentMembershipExpiry] = useState<string | null>(null);
 
   useEffect(() => {
-    // Set default due date to one month from now
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    setDueDate(nextMonth.toISOString().split('T')[0]);
+    // Fetch current membership expiry date for client
+    const fetchClientData = async () => {
+      try {
+        const client = await api.getClient(clientId);
+        if (client && client.membershipDueDate) {
+          setCurrentMembershipExpiry(client.membershipDueDate);
+        }
+      } catch (error) {
+        console.error('Error fetching client data:', error);
+      }
+    };
+
+    fetchClientData();
+
+    // Set default start date to today
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    setStartDate(todayStr);
+    // Calculate default expiry date (today + 1 day)
+    const expiry = new Date(today);
+    expiry.setDate(expiry.getDate() + 1);
+    setExpiryDate(`${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`);
   }, []);
 
   const handleSubmit = async () => {
-    if (!amount || !dueDate) {
+    if (!amount || !startDate || !expiryDate) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
+    }
+
+    // Check for active membership overlap
+    if (currentMembershipExpiry) {
+      const now = new Date();
+      const currentExpiryDate = new Date(currentMembershipExpiry);
+      const selectedExpiryDate = new Date(expiryDate);
+
+      // If current membership expiry is in the future and overlaps with selected expiry
+      if (currentExpiryDate > now && selectedExpiryDate <= currentExpiryDate) {
+        Alert.alert(
+          'Active Membership Exists',
+          'You already have an active membership. Please wait until it expires before making another payment.'
+        );
+        return;
+      }
     }
 
     const paymentAmount = parseFloat(amount);
@@ -48,23 +85,31 @@ const AddPaymentScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const today = new Date();
       const newPayment: Omit<Payment, 'id'> = {
         clientId,
         clientName,
         amount: paymentAmount,
-        paymentDate: new Date().toISOString().split('T')[0],
-        dueDate,
+        paymentDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
+        dueDate: expiryDate,
         status: 'Paid',
+        duration,
       };
 
       await api.addPayment(newPayment, isConnected);
 
-      // Re-schedule membership expiry reminders after payment update
+      // Schedule notifications based on duration
       try {
-        await notificationService.rescheduleMembershipReminders();
+        // Calculate expiry date based on startDate and duration
+        const start = new Date(startDate);
+        const expiry = new Date(start);
+        expiry.setDate(expiry.getDate() + duration);
+
+        // Schedule notifications 3 days before expiry and on expiry date
+        await notificationService.schedulePaymentNotification(clientId, clientName, duration);
       } catch (notificationError) {
-        console.error('Error re-scheduling notifications:', notificationError);
-        // Don't fail the payment if notification re-scheduling fails
+        console.error('Error scheduling notifications:', notificationError);
+        // Don't fail the payment if notification scheduling fails
       }
 
       Alert.alert('Success', 'Payment recorded successfully!');
@@ -76,10 +121,23 @@ const AddPaymentScreen: React.FC = () => {
     }
   };
 
-  const calculateDueDate = (months: number) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() + months);
-    setDueDate(date.toISOString().split('T')[0]);
+  const calculateExpiryDate = (days: number) => {
+    if (!startDate) return;
+
+    const start = new Date(startDate);
+    const expiry = new Date(start);
+    expiry.setDate(expiry.getDate() + days);
+    const expiryStr = `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
+    setExpiryDate(expiryStr);
+    setDuration(days);
+  };
+
+  const handleStartDateChange = (dateStr: string) => {
+    setStartDate(dateStr);
+    // Recalculate expiry date when start date changes
+    if (duration > 0) {
+      calculateExpiryDate(duration);
+    }
   };
 
   return (
@@ -101,51 +159,64 @@ const AddPaymentScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Due Date Quick Select */}
+        {/* Start Date Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Start Date *</Text>
+          <TextInput
+            style={styles.input}
+            value={startDate}
+            onChangeText={handleStartDateChange}
+            placeholder="YYYY-MM-DD"
+          />
+          <Text style={styles.helperText}>
+            Membership start date
+          </Text>
+        </View>
+
+        {/* Membership Duration */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Membership Duration</Text>
           <View style={styles.durationButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.durationButton}
-              onPress={() => calculateDueDate(1)}
+              onPress={() => calculateExpiryDate(1)}
+            >
+              <Text style={styles.durationButtonText}>1 Day</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.durationButton}
+              onPress={() => calculateExpiryDate(3)}
+            >
+              <Text style={styles.durationButtonText}>3 Days</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.durationButton}
+              onPress={() => calculateExpiryDate(7)}
+            >
+              <Text style={styles.durationButtonText}>1 Week</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.durationButton}
+              onPress={() => calculateExpiryDate(30)}
             >
               <Text style={styles.durationButtonText}>1 Month</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.durationButton}
-              onPress={() => calculateDueDate(3)}
-            >
-              <Text style={styles.durationButtonText}>3 Months</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.durationButton}
-              onPress={() => calculateDueDate(6)}
-            >
-              <Text style={styles.durationButtonText}>6 Months</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.durationButton}
-              onPress={() => calculateDueDate(12)}
-            >
-              <Text style={styles.durationButtonText}>1 Year</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Due Date Input */}
+        {/* Expiry Date Input */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Due Date *</Text>
+          <Text style={styles.label}>Expiry Date *</Text>
           <TextInput
             style={styles.input}
-            value={dueDate}
-            onChangeText={setDueDate}
+            value={expiryDate}
+            editable={false}
             placeholder="YYYY-MM-DD"
           />
           <Text style={styles.helperText}>
-            Current due date: {dueDate}
+            Automatically calculated from start date + duration
           </Text>
         </View>
 
@@ -157,8 +228,8 @@ const AddPaymentScreen: React.FC = () => {
             <Text style={styles.summaryValue}>Rs. {amount || '0.00'}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Due Date:</Text>
-            <Text style={styles.summaryValue}>{dueDate}</Text>
+            <Text style={styles.summaryLabel}>Expiry Date:</Text>
+            <Text style={styles.summaryValue}>{expiryDate}</Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total:</Text>
@@ -182,9 +253,19 @@ const AddPaymentScreen: React.FC = () => {
           </>
         )}
       </TouchableOpacity>
+
+      {/* Go Back Button */}
+      <TouchableOpacity
+        style={[styles.goBackButton]}
+        onPress={() => navigation.navigate('Clients', { screen: 'ClientDetail', params: { clientId, clientName } })}
+      >
+        <Ionicons name="arrow-back" size={20} color="#6B7280" />
+        <Text style={styles.goBackButtonText}>Go Back</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -341,6 +422,24 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  goBackButton: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+    gap: 8,
+  },
+  goBackButtonText: {
+    color: '#6B7280',
     fontSize: 16,
     fontWeight: '600',
   },

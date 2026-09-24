@@ -24,6 +24,7 @@ export interface Payment {
   paymentDate: string;
   dueDate: string;
   status: 'Paid' | 'Pending';
+  duration: number; // Duration in days
 }
 
 export interface DashboardStats {

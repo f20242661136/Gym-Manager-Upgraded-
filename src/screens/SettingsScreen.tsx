@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,11 +14,43 @@ import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { RootTabParamList } from '../types/navigation';
 import { exportDataAsCSV } from '../utils/dataExport';
+import { storage } from '../services/storage';
 
 const SettingsScreen: React.FC = () => {
-
   const { signOut } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
+
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  React.useEffect(() => {
+    // Load notification setting from storage on mount
+    const loadNotificationSetting = async () => {
+      try {
+        const storedValue = await storage.getItem('notificationsEnabled');
+        if (storedValue !== null) {
+          setNotificationsEnabled(storedValue === 'true');
+        }
+      } catch (error) {
+        console.error('Failed to load notification setting', error);
+      }
+    };
+    loadNotificationSetting();
+  }, []);
+
+  const toggleNotifications = async () => {
+    try {
+      const newValue = !notificationsEnabled;
+      setNotificationsEnabled(newValue);
+      await storage.setItem('notificationsEnabled', newValue.toString());
+      Alert.alert(
+        'Notification Settings',
+        `Notifications have been ${newValue ? 'enabled' : 'disabled'}.`
+      );
+    } catch (error) {
+      console.error('Failed to save notification setting', error);
+      Alert.alert('Error', 'Failed to update notification settings.');
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -44,14 +77,25 @@ const SettingsScreen: React.FC = () => {
 
   const settingsOptions = [
     {
-      title: 'Profile',
-      icon: 'person-outline',
-      onPress: () => Alert.alert('Coming Soon', 'Profile settings will be available soon.'),
+      title: 'Gym Management',
+      icon: 'business-outline',
+      onPress: () => navigation.navigate('GymManagement'),
+    },
+    {
+      title: 'Join Gym',
+      icon: 'people-circle-outline',
+      onPress: () => navigation.navigate('JoinGym'),
     },
     {
       title: 'Notifications',
       icon: 'notifications-outline',
-      onPress: () => Alert.alert('Coming Soon', 'Notification settings will be available soon.'),
+      onPress: toggleNotifications,
+      accessory: (
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={toggleNotifications}
+        />
+      ),
     },
     {
       title: 'Privacy',
@@ -96,12 +140,13 @@ const SettingsScreen: React.FC = () => {
             key={index}
             style={styles.optionItem}
             onPress={option.onPress}
+            activeOpacity={option.accessory ? 1 : 0.7}
           >
             <View style={styles.optionLeft}>
               <Ionicons name={option.icon as any} size={24} color="#6B7280" />
               <Text style={styles.optionText}>{option.title}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            {option.accessory ? option.accessory : <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
           </TouchableOpacity>
         ))}
       </View>

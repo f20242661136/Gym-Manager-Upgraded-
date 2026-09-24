@@ -17,9 +17,10 @@ const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const { signIn, signUp } = useAuth();
 
-  const handleLogin = async () => {
+  const handleAuth = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password');
       return;
@@ -28,9 +29,15 @@ const LoginScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await signIn(email, password);
+      if (mode === 'signup') {
+        await signUp(email, password);
+        Alert.alert('Account created', 'Your account was created successfully. You can now sign in.');
+        setMode('login');
+      } else {
+        await signIn(email, password);
+      }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+      Alert.alert(mode === 'signup' ? 'Sign up failed' : 'Login failed', error.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
     }
@@ -67,18 +74,25 @@ const LoginScreen: React.FC = () => {
 
         <TouchableOpacity
           style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-          onPress={handleLogin}
+          onPress={handleAuth}
           disabled={isLoading}
         >
           {isLoading ? (
-            <Text style={styles.loginButtonText}>Logging in...</Text>
+            <Text style={styles.loginButtonText}>{mode === 'signup' ? 'Creating account...' : 'Logging in...'}</Text>
           ) : (
-            <Text style={styles.loginButtonText}>Login</Text>
+            <Text style={styles.loginButtonText}>{mode === 'signup' ? 'Create account' : 'Login'}</Text>
           )}
         </TouchableOpacity>
 
-        <Text style={styles.demoText}>
-        </Text>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => setMode((prev) => (prev === 'login' ? 'signup' : 'login'))}
+          disabled={isLoading}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {mode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Login'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -137,11 +151,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  demoText: {
-    textAlign: 'center',
-    color: '#6B7280',
+  secondaryButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  secondaryButtonText: {
+    color: '#4F46E5',
     fontSize: 14,
-    marginTop: 16,
+    fontWeight: '600',
   },
 });
 
