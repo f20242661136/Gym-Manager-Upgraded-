@@ -7,20 +7,22 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { RootTabParamList } from '../types/navigation';
 import { useGym } from '../contexts/GymContext';
+import { useGymPermissions } from '../hook/useGymPermissions';
+import { roleLabel } from '../config/permissions';
 
 const GymManagementScreen: React.FC = () => {
-  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
+  const navigation = useNavigation<any>();
   const { gyms, activeGym, setActiveGym, refreshGyms } = useGym();
+  const { role, permissions } = useGymPermissions();
 
   const handleSwitchGym = async (gymId: string) => {
     try {
       await setActiveGym(gymId);
       await refreshGyms();
-      Alert.alert('Gym switched', 'Your active gym has been updated.');
+      Alert.alert('Gym switched', 'Your active workspace has been updated.');
     } catch (error) {
       console.error('Failed to switch gym:', error);
       Alert.alert('Error', 'Unable to switch gym right now.');
@@ -28,156 +30,352 @@ const GymManagementScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Gym management</Text>
-      <Text style={styles.subtitle}>Your connected gyms and active workspace.</Text>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.content}
+    >
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View style={styles.gymMark}>
+            <Ionicons name="barbell-outline" size={26} color="#FFFFFF" />
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Current gym</Text>
-        <Text style={styles.gymName}>{activeGym?.name || 'No gym selected'}</Text>
-        <Text style={styles.gymMeta}>{activeGym?.slug || 'No slug'}</Text>
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroEyebrow}>ACTIVE WORKSPACE</Text>
+            <Text style={styles.gymName}>
+              {activeGym?.name || 'No gym selected'}
+            </Text>
+            <Text style={styles.gymMeta}>
+              {activeGym?.countryCode === 'IN' ? 'India' : 'Pakistan'}
+              {'  |  '}
+              {activeGym?.currencyCode || 'PKR'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.accessPill}>
+          <Ionicons name="shield-checkmark-outline" size={15} color="#C7D2FE" />
+          <Text style={styles.accessText}>
+            {role ? roleLabel(role) : 'Loading access'}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('JoinGym')}>
-          <Text style={styles.primaryButtonText}>Join gym</Text>
+      <Text style={styles.sectionLabel}>MANAGE</Text>
+
+      <TouchableOpacity
+        style={styles.actionCard}
+        onPress={() => navigation.navigate('StaffManagement')}
+      >
+        <View style={[styles.actionIcon, styles.actionIconIndigo]}>
+          <Ionicons name="people-outline" size={23} color="#4F46E5" />
+        </View>
+
+        <View style={styles.actionCopy}>
+          <Text style={styles.actionTitle}>Staff & roles</Text>
+          <Text style={styles.actionSubtitle}>
+            View your team, permissions and staff access.
+          </Text>
+        </View>
+
+        <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
+      </TouchableOpacity>
+
+      {permissions.canViewAudit ? (
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('AuditLog')}
+        >
+          <View style={[styles.actionIcon, styles.actionIconGreen]}>
+            <Ionicons name="time-outline" size={23} color="#047857" />
+          </View>
+
+          <View style={styles.actionCopy}>
+            <Text style={styles.actionTitle}>Activity log</Text>
+            <Text style={styles.actionSubtitle}>
+              Review important staff and financial actions.
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
         </TouchableOpacity>
-      </View>
+      ) : null}
+
+      <TouchableOpacity
+        style={styles.actionCard}
+        onPress={() => navigation.navigate('JoinGym')}
+      >
+        <View style={[styles.actionIcon, styles.actionIconAmber]}>
+          <Ionicons name="person-add-outline" size={23} color="#B45309" />
+        </View>
+
+        <View style={styles.actionCopy}>
+          <Text style={styles.actionTitle}>Join another gym</Text>
+          <Text style={styles.actionSubtitle}>
+            Accept a temporary invitation from another workspace.
+          </Text>
+        </View>
+
+        <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
+      </TouchableOpacity>
+
+      <Text style={styles.sectionLabel}>YOUR WORKSPACES</Text>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Your gyms</Text>
         {gyms.length === 0 ? (
           <Text style={styles.emptyState}>No gyms joined yet.</Text>
         ) : (
-          gyms.map((gym) => {
+          gyms.map((gym, index) => {
             const isActive = gym.id === activeGym?.id;
+
             return (
               <TouchableOpacity
                 key={gym.id}
-                style={[styles.gymRow, isActive && styles.activeGymRow]}
+                style={[
+                  styles.gymRow,
+                  index > 0 && styles.gymRowBorder,
+                ]}
                 onPress={() => handleSwitchGym(gym.id)}
               >
+                <View style={styles.gymRowIcon}>
+                  <Ionicons
+                    name="business-outline"
+                    size={20}
+                    color={isActive ? '#4F46E5' : '#64748B'}
+                  />
+                </View>
+
                 <View style={styles.gymRowInfo}>
                   <Text style={styles.gymRowName}>{gym.name}</Text>
-                  <Text style={styles.gymRowSlug}>{gym.slug}</Text>
+                  <Text style={styles.gymRowSlug}>
+                    {gym.countryCode} Â· {gym.currencyCode}
+                  </Text>
                 </View>
-                <Text style={[styles.gymStatus, isActive && styles.activeGymStatus]}>
-                  {isActive ? 'Active' : 'Switch'}
-                </Text>
+
+                <View
+                  style={[
+                    styles.statusBadge,
+                    isActive && styles.statusBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      isActive && styles.statusTextActive,
+                    ]}
+                  >
+                    {isActive ? 'Active' : 'Switch'}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })
         )}
+      </View>
+
+      <View style={styles.securityNote}>
+        <Ionicons
+          name="lock-closed-outline"
+          size={19}
+          color="#475569"
+        />
+        <Text style={styles.securityText}>
+          Staff invitations now expire automatically. The old permanent join
+          code is no longer used for new staff access.
+        </Text>
       </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
+  page: {
+    flex: 1,
     backgroundColor: '#F8FAFC',
-    flexGrow: 1,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+  content: {
+    padding: 18,
+    paddingBottom: 44,
   },
-  subtitle: {
+  hero: {
+    backgroundColor: '#312E81',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gymMark: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    marginRight: 14,
+  },
+  heroCopy: {
+    flex: 1,
+  },
+  heroEyebrow: {
+    color: '#C7D2FE',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+  },
+  gymName: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  gymMeta: {
+    color: '#E0E7FF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+  },
+  accessPill: {
+    marginTop: 16,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  accessText: {
+    color: '#E0E7FF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  sectionLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    marginBottom: 9,
+    marginTop: 4,
+  },
+  actionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  actionIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+  actionIconIndigo: {
+    backgroundColor: '#EEF2FF',
+  },
+  actionIconGreen: {
+    backgroundColor: '#ECFDF5',
+  },
+  actionIconAmber: {
+    backgroundColor: '#FFFBEB',
+  },
+  actionCopy: {
+    flex: 1,
+  },
+  actionTitle: {
+    color: '#0F172A',
     fontSize: 15,
-    color: '#4B5563',
-    marginBottom: 20,
+    fontWeight: '800',
+  },
+  actionSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    fontWeight: '700',
-  },
-  gymName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  gymMeta: {
-    marginTop: 6,
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-  actionsRow: {
-    marginBottom: 18,
-  },
-  primaryButton: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  emptyState: {
-    color: '#6B7280',
-    fontSize: 15,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 15,
+    marginBottom: 16,
   },
   gymRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginTop: 10,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 15,
   },
-  activeGymRow: {
-    borderColor: '#4F46E5',
-    backgroundColor: '#EEF2FF',
+  gymRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  gymRowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
   },
   gymRowInfo: {
     flex: 1,
   },
   gymRowName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
   },
   gymRowSlug: {
-    marginTop: 4,
-    color: '#6B7280',
-    fontSize: 13,
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 3,
   },
-  gymStatus: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+  statusBadge: {
+    backgroundColor: '#F1F5F9',
     borderRadius: 999,
-    backgroundColor: '#F3F4F6',
-    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  activeGymStatus: {
-    backgroundColor: '#4F46E5',
-    color: '#FFFFFF',
+  statusBadgeActive: {
+    backgroundColor: '#EEF2FF',
+  },
+  statusText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  statusTextActive: {
+    color: '#4F46E5',
+  },
+  emptyState: {
+    color: '#94A3B8',
+    paddingVertical: 18,
+  },
+  securityNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 15,
+    padding: 14,
+    gap: 9,
+  },
+  securityText: {
+    flex: 1,
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
   },
 });
 

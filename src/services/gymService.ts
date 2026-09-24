@@ -1,7 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import type { CountryCode } from '../types';
+import type { Gym } from '../types/gym';
 
 const ACTIVE_GYM_STORAGE_KEY = 'active_gym_id';
+
+const mapGym = (gym: any): Gym => ({
+  id: gym.id,
+  name: gym.name,
+  slug: gym.slug,
+  logoUrl: gym.logo_url ?? null,
+  phone: gym.phone ?? null,
+  email: gym.email ?? null,
+  address: gym.address ?? null,
+  countryCode: gym.country_code === 'IN' ? 'IN' : 'PK',
+  currencyCode: gym.currency_code === 'INR' ? 'INR' : 'PKR',
+  timezone: gym.timezone ?? (gym.country_code === 'IN' ? 'Asia/Kolkata' : 'Asia/Karachi'),
+  locale: gym.locale ?? (gym.country_code === 'IN' ? 'en-IN' : 'en-PK'),
+  joinCode: gym.join_code ?? null,
+  status: gym.status,
+  createdAt: gym.created_at,
+  updatedAt: gym.updated_at,
+});
 
 export const getCurrentGymId = async (): Promise<string | null> => {
   try {
@@ -25,8 +45,11 @@ export const setCurrentGymId = async (gymId: string | null): Promise<void> => {
   }
 };
 
-export const getUserGyms = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
+export const getUserGyms = async (): Promise<Gym[]> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
     return [];
   }
@@ -46,6 +69,11 @@ export const getUserGyms = async () => {
         phone,
         email,
         address,
+        country_code,
+        currency_code,
+        timezone,
+        locale,
+        join_code,
         status,
         created_at,
         updated_at
@@ -61,124 +89,80 @@ export const getUserGyms = async () => {
   return (data ?? [])
     .map((row: any) => row.gyms)
     .filter(Boolean)
-    .map((gym: any) => ({
-      id: gym.id,
-      name: gym.name,
-      slug: gym.slug,
-      logoUrl: gym.logo_url ?? null,
-      phone: gym.phone ?? null,
-      email: gym.email ?? null,
-      address: gym.address ?? null,
-      status: gym.status,
-      createdAt: gym.created_at,
-      updatedAt: gym.updated_at,
-    }));
+    .map(mapGym);
 };
 
 export const createGym = async (input: {
   name: string;
   slug: string;
+  countryCode?: CountryCode;
   logoUrl?: string | null;
   phone?: string | null;
   email?: string | null;
   address?: string | null;
-}) => {
-  const { data: { user } } = await supabase.auth.getUser();
+}): Promise<Gym> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
     throw new Error('You must be signed in to create a gym.');
   }
 
-  const { data: gym, error: gymError } = await supabase
-    .from('gyms')
-    .insert([
-      {
-        name: input.name,
-        slug: input.slug,
-        logo_url: input.logoUrl ?? null,
-        phone: input.phone ?? null,
-        email: input.email ?? null,
-        address: input.address ?? null,
-        status: 'active',
-      },
-    ])
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('create_gym', {
+    p_name: input.name,
+    p_slug: input.slug,
+    p_country_code: input.countryCode ?? 'PK',
+    p_phone: input.phone ?? null,
+    p_email: input.email ?? null,
+    p_address: input.address ?? null,
+    p_logo_url: input.logoUrl ?? null,
+  });
 
-  if (gymError) {
-    throw gymError;
+  if (error) {
+    throw error;
   }
 
-  const { error: membershipError } = await supabase.from('gym_users').insert([
-    {
-      gym_id: gym.id,
-      user_id: user.id,
-      role: 'owner',
-      status: 'active',
-    },
-  ]);
-
-  if (membershipError) {
-    throw membershipError;
+  if (!data) {
+    throw new Error('Gym could not be created.');
   }
 
+  const gym = mapGym(data);
   await setCurrentGymId(gym.id);
   return gym;
 };
 
-export const joinGymBySlug = async (slug: string) => {
-  const normalisedSlug = slug.trim().toLowerCase();
-  if (!normalisedSlug) {
-    throw new Error('Gym slug is required.');
+export const joinGymByCode = async (joinCode: string): Promise<Gym> => {
+  const code = joinCode.trim().toUpperCase();
+
+  if (!code) {
+    throw new Error('Gym join code is required.');
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
     throw new Error('You must be signed in to join a gym.');
   }
 
-  const { data: gym, error: gymLookupError } = await supabase
-    .from('gyms')
-    .select('*')
-    .eq('slug', normalisedSlug)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('join_gym_by_code', {
+    p_join_code: code,
+  });
 
-  if (gymLookupError) {
-    throw gymLookupError;
+  if (error) {
+    throw error;
   }
 
-  if (!gym) {
-    throw new Error('No gym was found for that slug.');
+  if (!data) {
+    throw new Error('No gym was found for that join code.');
   }
 
-  const { data: existingMembership } = await supabase
-    .from('gym_users')
-    .select('id, status')
-    .eq('gym_id', gym.id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (existingMembership?.status === 'active') {
-    await setCurrentGymId(gym.id);
-    return gym;
-  }
-
-  const { data: membership, error: joinError } = await supabase
-    .from('gym_users')
-    .insert([
-      {
-        gym_id: gym.id,
-        user_id: user.id,
-        role: 'staff',
-        status: 'active',
-      },
-    ])
-    .select()
-    .single();
-
-  if (joinError) {
-    throw joinError;
-  }
-
+  const gym = mapGym(data);
   await setCurrentGymId(gym.id);
   return gym;
 };
+
+// Temporary compatibility alias in case another old import still exists.
+export const joinGymBySlug = joinGymByCode;

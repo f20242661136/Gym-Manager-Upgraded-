@@ -15,11 +15,14 @@ import { RouteProp } from '@react-navigation/native';
 import { PaymentStackParamList } from '../types/navigation';
 import { api } from '../services/api';
 import { Payment } from '../types/index';
+import { useGym } from '../contexts/GymContext';
+import { formatMoney } from '../utils/currency';
 
 const PaymentsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<PaymentStackParamList>>();
   const route = useRoute<RouteProp<PaymentStackParamList, 'PaymentsList'>>();
   const { clientId, clientName } = route.params || {};
+  const { activeGym } = useGym();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filter, setFilter] = useState<'all' | 'due'>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -77,8 +80,12 @@ const PaymentsScreen: React.FC = () => {
       
       <View style={styles.paymentBody}>
         <View style={styles.amountContainer}>
-          <Text style={styles.amount}>Rs. {payment.amount}</Text>
-          <Text style={styles.currency}>PKR</Text>
+          <Text style={styles.amount}>
+            {formatMoney(payment.amount, activeGym?.currencyCode ?? 'PKR')}
+          </Text>
+          <Text style={styles.currency}>
+            {activeGym?.currencyCode ?? 'PKR'} Ã¢â‚¬Â¢ {payment.paymentMethod || 'cash'}
+          </Text>
         </View>
         
         <View style={styles.datesContainer}>
@@ -189,7 +196,10 @@ const PaymentsScreen: React.FC = () => {
         
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>
-            Rs. {payments.reduce((sum, payment) => sum + payment.amount, 0).toFixed(2)}
+            {formatMoney(
+              payments.reduce((sum, payment) => sum + payment.amount, 0),
+              activeGym?.currencyCode ?? 'PKR'
+            )}
           </Text>
           <Text style={styles.statLabel}>Revenue</Text>
         </View>

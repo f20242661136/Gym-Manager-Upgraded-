@@ -16,6 +16,8 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootTabParamList, ClientStackParamList } from '../types/navigation';
 import { api } from '../services/api';
 import { Client, Payment } from '../types';
+import { useGym } from '../contexts/GymContext';
+import { formatMoney } from '../utils/currency';
 
 const formatMeasurement = (value: number | null | undefined, decimals = 0): string => {
   if (value == null) {
@@ -29,6 +31,7 @@ const ClientDetailScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootTabParamList>>();
   const route = useRoute<RouteProp<ClientStackParamList, 'ClientDetail'>>();
   const { clientId } = route.params;
+  const { activeGym } = useGym();
 
   const [client, setClient] = useState<Client | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -263,7 +266,9 @@ const ClientDetailScreen: React.FC = () => {
             payments.map((payment) => (
               <View key={payment.id} style={styles.paymentItem}>
                 <View style={styles.paymentInfo}>
-                  <Text style={styles.paymentAmount}>Rs. {payment.amount}</Text>
+                  <Text style={styles.paymentAmount}>
+                    {formatMoney(payment.amount, activeGym?.currencyCode ?? 'PKR')}
+                  </Text>
                   <Text style={styles.paymentDate}>{payment.paymentDate}</Text>
                 </View>
                 <View style={[

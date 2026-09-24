@@ -308,6 +308,10 @@ export const api = {
         dueDate: item.due_date,
         status: item.status,
         duration: item.duration || 1,
+        paymentMethod: item.payment_method || 'cash',
+        referenceNumber: item.reference_number ?? null,
+        providerTransactionId: item.provider_transaction_id ?? null,
+        notes: item.notes ?? null,
       })) || [];
 
       // Cache for offline use
@@ -337,6 +341,10 @@ export const api = {
         due_date: payment.dueDate,
         status: payment.status,
         duration: payment.duration,
+        payment_method: payment.paymentMethod,
+        reference_number: payment.referenceNumber ?? null,
+        provider_transaction_id: payment.providerTransactionId ?? null,
+        notes: payment.notes ?? null,
       };
 
       const { data, error } = await supabase
@@ -356,6 +364,10 @@ export const api = {
         dueDate: data.due_date,
         status: data.status,
         duration: data.duration || 1,
+        paymentMethod: data.payment_method || 'cash',
+        referenceNumber: data.reference_number ?? null,
+        providerTransactionId: data.provider_transaction_id ?? null,
+        notes: data.notes ?? null,
       };
 
       // Update client membership status
@@ -553,6 +565,10 @@ export const api = {
         dueDate: item.due_date,
         status: item.status,
         duration: item.duration || 1,
+        paymentMethod: item.payment_method || 'cash',
+        referenceNumber: item.reference_number ?? null,
+        providerTransactionId: item.provider_transaction_id ?? null,
+        notes: item.notes ?? null,
       })) || [];
 
       return payments;
