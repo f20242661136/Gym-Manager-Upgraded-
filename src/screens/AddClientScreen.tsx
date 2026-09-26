@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import React, {
+  useMemo,
+  useState,
+} from 'react';
 import {
   View,
   Text,
@@ -9,60 +13,250 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
+
 import { api } from '../services/api';
-import { Client } from '../types';
-import { pickImage, takePhoto } from '../utils/imagePicker';
+import type { Client } from '../types';
+import {
+  pickImage,
+  takePhoto,
+} from '../utils/imagePicker';
 import { useNetworkStatus } from '../hook/useNetworkStatus';
+import {
+  SectionHeader,
+  StatusPill,
+  SurfaceCard,
+} from '../ui/components';
+import { ui } from '../ui/theme';
 
-interface AddClientScreenProps {
-  route?: any;
-}
+type FormData = {
+  name: string;
+  phone: string;
+  email: string;
+  age: string;
+  gender: string;
+  weight: string;
+  height: string;
+  chest: string;
+  waist: string;
+};
 
-const AddClientScreen: React.FC<AddClientScreenProps> = ({ route }) => {
-  const navigation = useNavigation();
-  const isEditing = route?.params?.isEditing;
-  const existingClient = route?.params?.client;
-  const isConnected = useNetworkStatus();
+const AddClientScreen: React.FC = () => {
+  const navigation =
+    useNavigation<any>();
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [photoUri, setPhotoUri] = useState(existingClient?.photoUrl || '');
-  
-  const [formData, setFormData] = useState({
-    name: existingClient?.name || '',
-    phone: existingClient?.phone || '',
-    email: existingClient?.email || '',
-    age: existingClient?.age?.toString() || '',
-    gender: existingClient?.gender || '',
-    weight: existingClient?.weight?.toString() || '',
-    height: existingClient?.height?.toString() || '',
-    chest: existingClient?.chest?.toString() || '',
-    waist: existingClient?.waist?.toString() || '',
+  const route = useRoute<any>();
+
+  const isEditing =
+    Boolean(
+      route.params?.isEditing
+    );
+
+  const existingClient:
+    Client | undefined =
+      route.params?.client;
+
+  const isConnected =
+    useNetworkStatus();
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [photoUri, setPhotoUri] =
+    useState(
+      existingClient?.photoUrl || ''
+    );
+
+  const [
+    showOptional,
+    setShowOptional,
+  ] = useState(
+    Boolean(
+      existingClient?.age ||
+      existingClient?.gender
+    )
+  );
+
+  const [
+    showMeasurements,
+    setShowMeasurements,
+  ] = useState(
+    Boolean(
+      existingClient?.weight ||
+      existingClient?.height ||
+      existingClient?.chest ||
+      existingClient?.waist
+    )
+  );
+
+  const [formError, setFormError] =
+    useState<string | null>(null);
+
+  const [
+    formData,
+    setFormData,
+  ] = useState<FormData>({
+    name:
+      existingClient?.name || '',
+    phone:
+      existingClient?.phone || '',
+    email:
+      existingClient?.email || '',
+    age:
+      existingClient?.age
+        ? String(existingClient.age)
+        : '',
+    gender:
+      existingClient?.gender || '',
+    weight:
+      existingClient?.weight
+        ? String(
+            existingClient.weight
+          )
+        : '',
+    height:
+      existingClient?.height
+        ? String(
+            existingClient.height
+          )
+        : '',
+    chest:
+      existingClient?.chest
+        ? String(
+            existingClient.chest
+          )
+        : '',
+    waist:
+      existingClient?.waist
+        ? String(
+            existingClient.waist
+          )
+        : '',
   });
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const setField = (
+    field: keyof FormData,
+    value: string
+  ) => {
+    setFormError(null);
+
+    setFormData(previous => ({
+      ...previous,
+      [field]: value,
+    }));
   };
 
-  const handleImagePick = async () => {
+  const bmi = useMemo(() => {
+    const weight =
+      Number(formData.weight);
+
+    const height =
+      Number(formData.height);
+
+    if (
+      !Number.isFinite(weight) ||
+      !Number.isFinite(height) ||
+      weight <= 0 ||
+      height <= 0
+    ) {
+      return null;
+    }
+
+    const meters = height / 100;
+
+    return weight / (meters * meters);
+  }, [
+    formData.height,
+    formData.weight,
+  ]);
+
+  const validate = () => {
+    if (!formData.name.trim()) {
+      return 'Enter the member name.';
+    }
+
+    if (!formData.phone.trim()) {
+      return 'Enter a phone number.';
+    }
+
+    if (
+      formData.email.trim() &&
+      !formData.email.includes('@')
+    ) {
+      return 'Enter a valid email or leave email empty.';
+    }
+
+    const age =
+      formData.age.trim()
+        ? Number(formData.age)
+        : 0;
+
+    if (
+      age &&
+      (age < 10 || age > 100)
+    ) {
+      return 'Age should be between 10 and 100.';
+    }
+
+    const weight =
+      formData.weight.trim()
+        ? Number(formData.weight)
+        : 0;
+
+    if (
+      weight &&
+      (weight < 20 || weight > 300)
+    ) {
+      return 'Check the weight value.';
+    }
+
+    const height =
+      formData.height.trim()
+        ? Number(formData.height)
+        : 0;
+
+    if (
+      height &&
+      (height < 80 || height > 250)
+    ) {
+      return 'Check the height value.';
+    }
+
+    return null;
+  };
+
+  const choosePhoto = () => {
     Alert.alert(
-      'Add Photo',
-      'Choose an option',
+      'Member photo',
+      'Choose a photo source.',
       [
         {
-          text: 'Take Photo',
+          text: 'Take photo',
           onPress: async () => {
-            const uri = await takePhoto();
-            if (uri) setPhotoUri(uri);
+            const uri =
+              await takePhoto();
+
+            if (uri) {
+              setPhotoUri(uri);
+            }
           },
         },
         {
-          text: 'Choose from Gallery',
+          text: 'Choose photo',
           onPress: async () => {
-            const uri = await pickImage();
-            if (uri) setPhotoUri(uri);
+            const uri =
+              await pickImage();
+
+            if (uri) {
+              setPhotoUri(uri);
+            }
           },
         },
         {
@@ -73,375 +267,1201 @@ const AddClientScreen: React.FC<AddClientScreenProps> = ({ route }) => {
     );
   };
 
-  const calculateBMI = (weight: number, height: number): number => {
-    const heightInMeters = height / 100;
-    return weight / (heightInMeters * heightInMeters);
-  };
+  const submit = async () => {
+    const validation =
+      validate();
 
-  const weightNum = parseFloat(formData.weight) || 0;
-  const heightNum = parseFloat(formData.height) || 0;
-  const bmi = weightNum > 0 && heightNum > 0 ? calculateBMI(weightNum, heightNum).toFixed(1) : '';
-
-  const validateForm = (): string | null => {
-    if (!formData.name.trim()) return 'Name is required';
-    if (!formData.phone.trim()) return 'Phone number is required';
-    if (!formData.email.trim()) return 'Email is required';
-    if (!formData.email.includes('@')) return 'Please enter a valid email';
-    
-    const age = parseInt(formData.age);
-    if (age && (age < 15 || age > 100)) return 'Please enter a valid age (15-100)';
-    
-    const weight = parseFloat(formData.weight);
-    if (weight && (weight < 30 || weight > 200)) return 'Please enter a valid weight (30-200 kg)';
-    
-    const height = parseFloat(formData.height);
-    if (height && (height < 100 || height > 250)) return 'Please enter a valid height (100-250 cm)';
-    
-    return null;
-  };
-
-  // In handleSubmit function, after validation:
-const handleSubmit = async () => {
-  const validationError = validateForm();
-  if (validationError) {
-    Alert.alert('Validation Error', validationError);
-    return;
-  }
-
-  setIsLoading(true);
-
-  try {
-    let finalPhotoUrl = photoUri;
-
-    // Upload image if a new one was selected
-    if (photoUri && !photoUri.startsWith('http')) {
-      const fileName = `client_${Date.now()}.jpg`;
-      finalPhotoUrl = await api.uploadImage(photoUri, fileName);
+    if (validation) {
+      setFormError(validation);
+      return;
     }
 
-    const weight = parseFloat(formData.weight) || 0;
-    const height = parseFloat(formData.height) || 0;
-    const bmi = calculateBMI(weight, height);
+    setIsLoading(true);
 
-    const today = new Date();
-    const clientData: Omit<Client, 'id'> = {
-      name: formData.name.trim(),
-      phone: formData.phone.trim(),
-      email: formData.email.trim(),
-      age: parseInt(formData.age) || 0,
-      gender: formData.gender.trim(),
-      weight: weight,
-      height: height,
-      chest: parseFloat(formData.chest) || 0,
-      waist: parseFloat(formData.waist) || 0,
-      bmi: bmi,
-      photoUrl: finalPhotoUrl,
-      membershipStatus: existingClient?.membershipStatus || 'Unpaid',
-      registrationDate: existingClient?.registrationDate || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
-      membershipDueDate: existingClient?.membershipDueDate || '',
-    };
+    try {
+      let finalPhotoUrl =
+        photoUri;
 
-    if (isEditing && existingClient) {
-      await api.updateClient(existingClient.id, { ...clientData, id: existingClient.id }, isConnected);
-      Alert.alert('Success', 'Client updated successfully!');
-    } else {
-      await api.addClient(clientData, isConnected);
-      Alert.alert('Success', 'Client added successfully!');
+      let finalPhotoPath:
+        string | null =
+        existingClient
+          ?.photoPath || null;
+
+      let skippedOfflinePhoto =
+        false;
+
+      let photoUploadFailed =
+        false;
+
+      if (
+        photoUri &&
+        !photoUri.startsWith('http')
+      ) {
+        if (!isConnected) {
+          finalPhotoUrl =
+            existingClient
+              ?.photoUrl || '';
+
+          skippedOfflinePhoto = true;
+        } else {
+          const fileName =
+            `client_${Date.now()}.jpg`;
+
+          try {
+            const uploadedPhoto =
+              await api.uploadImage(
+                photoUri,
+                fileName
+              );
+
+            finalPhotoUrl =
+              uploadedPhoto.url;
+
+            finalPhotoPath =
+              uploadedPhoto.path;
+          } catch (
+            photoError: any
+          ) {
+            console.warn(
+              'Member photo upload skipped:',
+              photoError?.message ||
+                photoError
+            );
+
+            finalPhotoUrl =
+              existingClient
+                ?.photoUrl || '';
+
+            photoUploadFailed =
+              true;
+          }
+        }
+      }
+
+      const weight =
+        Number(formData.weight) || 0;
+
+      const height =
+        Number(formData.height) || 0;
+
+      const today = new Date();
+
+      const registrationDate =
+        existingClient
+          ?.registrationDate ||
+        `${today.getFullYear()}-${String(
+          today.getMonth() + 1
+        ).padStart(2, '0')}-${String(
+          today.getDate()
+        ).padStart(2, '0')}`;
+
+      const clientData:
+        Omit<Client, 'id'> = {
+          name:
+            formData.name.trim(),
+          phone:
+            formData.phone.trim(),
+          email:
+            formData.email
+              .trim()
+              .toLowerCase(),
+          age:
+            Number(formData.age) ||
+            0,
+          gender:
+            formData.gender.trim(),
+          weight,
+          height,
+          chest:
+            Number(formData.chest) ||
+            0,
+          waist:
+            Number(formData.waist) ||
+            0,
+          bmi:
+            weight > 0 &&
+            height > 0
+              ? weight /
+                Math.pow(
+                  height / 100,
+                  2
+                )
+              : 0,
+          photoUrl:
+            finalPhotoUrl,
+          photoPath:
+            finalPhotoPath,
+          membershipStatus:
+            existingClient
+              ?.membershipStatus ||
+            'Unpaid',
+          registrationDate,
+          membershipDueDate:
+            existingClient
+              ?.membershipDueDate ||
+            '',
+          serverUpdatedAt:
+            existingClient
+              ?.serverUpdatedAt ||
+            null,
+          syncVersion:
+            existingClient
+              ?.syncVersion ||
+            null,
+          syncState:
+            existingClient
+              ?.syncState ||
+            'synced',
+        };
+
+      let result: Client;
+
+      if (
+        isEditing &&
+        existingClient
+      ) {
+        result =
+          await api.updateClient(
+            existingClient.id,
+            {
+              ...clientData,
+              id: existingClient.id,
+            },
+            isConnected
+          );
+      } else {
+        result =
+          await api.addClient(
+            clientData,
+            isConnected
+          );
+      }
+
+      const offline =
+        result.syncState ===
+        'pending';
+
+      const title = offline
+        ? 'Saved offline'
+        : isEditing
+          ? 'Member updated'
+          : 'Member added';
+
+      let message = offline
+        ? 'The member is saved on this device and will sync when the connection returns.'
+        : isEditing
+          ? 'Member details were updated.'
+          : 'The member profile is ready.';
+
+      if (skippedOfflinePhoto) {
+        message +=
+          '\n\nThe new photo was not uploaded because the device is offline. You can add it after reconnecting.';
+      }
+
+      if (photoUploadFailed) {
+        message +=
+          '\n\nThe member was saved, but the new profile photo could not be uploaded. Existing photo data was preserved where possible.';
+      }
+
+      Alert.alert(
+        title,
+        message,
+        [
+          {
+            text: 'Done',
+            onPress: () =>
+              navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error(
+        'Member save failed:',
+        error
+      );
+
+      setFormError(
+        error?.message ||
+          `Unable to ${
+            isEditing
+              ? 'update'
+              : 'add'
+          } this member.`
+      );
+    } finally {
+      setIsLoading(false);
     }
-    
-    navigation.goBack();
-  } catch (error) {
-    Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'add'} client`);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   return (
-    <ScrollView style={styles.container}>
-
-      {/* Photo Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Profile Photo</Text>
-        <View style={styles.photoContainer}>
-          <TouchableOpacity style={styles.photoButton} onPress={handleImagePick}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.clientPhoto} />
-            ) : (
-              <View style={styles.photoPlaceholder}>
-                <Ionicons name="camera" size={32} color="#6B7280" />
-                <Text style={styles.photoText}>Add Photo</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          {photoUri && (
-            <TouchableOpacity 
-              style={styles.removePhotoButton}
-              onPress={() => setPhotoUri('')}
+    <KeyboardAvoidingView
+      style={styles.page}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }
+    >
+      <ScrollView
+        contentContainerStyle={
+          styles.content
+        }
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={() =>
+                navigation.goBack()
+              }
+              style={
+                styles.backButton
+              }
             >
-              <Ionicons name="close-circle" size={24} color="#EF4444" />
+              <Ionicons
+                name="arrow-back"
+                size={21}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
-      {/* Rest of the form remains the same... */}
-      {/* Personal Information Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Personal Information</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.name}
-            onChangeText={(value) => handleInputChange('name', value)}
-            placeholder="Enter full name"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.phone}
-            onChangeText={(value) => handleInputChange('phone', value)}
-            placeholder="Enter phone number"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="Enter email address"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Age</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.age}
-              onChangeText={(value) => handleInputChange('age', value)}
-              placeholder="Age"
-              keyboardType="numeric"
+            <StatusPill
+              label={
+                isEditing
+                  ? 'EDIT PROFILE'
+                  : 'NEW MEMBER'
+              }
+              toneName="brand"
             />
           </View>
 
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Gender</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.gender}
-              onChangeText={(value) => handleInputChange('gender', value)}
-              placeholder="Gender"
-            />
-          </View>
-        </View>
-      </View>
+          <Text style={styles.heroTitle}>
+            {isEditing
+              ? 'Update member'
+              : 'Add member'}
+          </Text>
 
-      {/* Body Measurements Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Body Measurements</Text>
-        
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Weight (kg)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.weight}
-              onChangeText={(value) => handleInputChange('weight', value)}
-              placeholder="Weight"
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Height (cm)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.height}
-              onChangeText={(value) => handleInputChange('height', value)}
-              placeholder="Height"
-              keyboardType="numeric"
-            />
-          </View>
+          <Text
+            style={
+              styles.heroSubtitle
+            }
+          >
+            Start with the essentials.
+            Optional profile and body
+            details can be added now or
+            later.
+          </Text>
         </View>
 
-        {bmi ? (
-          <View style={styles.bmiContainer}>
-            <Text style={styles.bmiLabel}>Calculated BMI:</Text>
-            <Text style={styles.bmiValue}>{bmi}</Text>
+        {formError ? (
+          <View style={styles.errorBox}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={19}
+              color={ui.color.danger}
+            />
+            <Text
+              style={styles.errorText}
+            >
+              {formError}
+            </Text>
           </View>
         ) : null}
 
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Chest (cm)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.chest}
-              onChangeText={(value) => handleInputChange('chest', value)}
-              placeholder="Chest"
-              keyboardType="numeric"
+        <SurfaceCard
+          style={styles.photoCard}
+        >
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose member photo"
+            onPress={choosePhoto}
+            style={styles.photoButton}
+          >
+            {photoUri ? (
+              <Image
+                source={{
+                  uri: photoUri,
+                }}
+                style={styles.photo}
+              />
+            ) : (
+              <View
+                style={
+                  styles.photoPlaceholder
+                }
+              >
+                <Ionicons
+                  name="camera-outline"
+                  size={25}
+                  color={
+                    ui.color.brand
+                  }
+                />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.photoCopy}>
+            <Text
+              style={
+                styles.photoTitle
+              }
+            >
+              Member photo
+            </Text>
+            <Text
+              style={
+                styles.photoSubtitle
+              }
+            >
+              Optional. Useful for quick
+              recognition at reception.
+            </Text>
+
+            <View
+              style={styles.photoActions}
+            >
+              <TouchableOpacity
+                onPress={choosePhoto}
+                style={
+                  styles.smallButton
+                }
+              >
+                <Text
+                  style={
+                    styles.smallButtonText
+                  }
+                >
+                  {photoUri
+                    ? 'Change'
+                    : 'Add photo'}
+                </Text>
+              </TouchableOpacity>
+
+              {photoUri ? (
+                <TouchableOpacity
+                  onPress={() =>
+                    setPhotoUri('')
+                  }
+                  style={
+                    styles.removeButton
+                  }
+                >
+                  <Text
+                    style={
+                      styles.removeText
+                    }
+                  >
+                    Remove
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.card}>
+          <SectionHeader
+            title="Essentials"
+            subtitle="The information reception needs most."
+          />
+
+          <Field
+            label="Full name"
+            required
+            value={formData.name}
+            onChangeText={value =>
+              setField(
+                'name',
+                value
+              )
+            }
+            placeholder="Ali Raza"
+            autoCapitalize="words"
+          />
+
+          <Field
+            label="Phone"
+            required
+            value={formData.phone}
+            onChangeText={value =>
+              setField(
+                'phone',
+                value
+              )
+            }
+            placeholder="0300 1234567"
+            keyboardType="phone-pad"
+          />
+
+          <Field
+            label="Email"
+            value={formData.email}
+            onChangeText={value =>
+              setField(
+                'email',
+                value
+              )
+            }
+            placeholder="Optional"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </SurfaceCard>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() =>
+            setShowOptional(
+              value => !value
+            )
+          }
+          style={styles.disclosure}
+        >
+          <View
+            style={
+              styles.disclosureIcon
+            }
+          >
+            <Ionicons
+              name="person-outline"
+              size={19}
+              color={ui.color.brand}
             />
           </View>
 
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Waist (cm)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.waist}
-              onChangeText={(value) => handleInputChange('waist', value)}
-              placeholder="Waist"
-              keyboardType="numeric"
+          <View
+            style={
+              styles.disclosureCopy
+            }
+          >
+            <Text
+              style={
+                styles.disclosureTitle
+              }
+            >
+              Personal details
+            </Text>
+            <Text
+              style={
+                styles.disclosureSubtitle
+              }
+            >
+              Age and gender - optional
+            </Text>
+          </View>
+
+          <Ionicons
+            name={
+              showOptional
+                ? 'chevron-up'
+                : 'chevron-down'
+            }
+            size={20}
+            color={ui.color.textMuted}
+          />
+        </TouchableOpacity>
+
+        {showOptional ? (
+          <SurfaceCard
+            style={styles.card}
+          >
+            <View style={styles.twoCol}>
+              <View style={styles.flex}>
+                <Field
+                  label="Age"
+                  value={
+                    formData.age
+                  }
+                  onChangeText={value =>
+                    setField(
+                      'age',
+                      value
+                    )
+                  }
+                  placeholder="25"
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={styles.flex}>
+                <Text style={styles.label}>
+                  Gender
+                </Text>
+
+                <View
+                  style={styles.genderRow}
+                >
+                  {[
+                    'Male',
+                    'Female',
+                    'Other',
+                  ].map(option => {
+                    const selected =
+                      formData.gender ===
+                      option;
+
+                    return (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() =>
+                          setField(
+                            'gender',
+                            selected
+                              ? ''
+                              : option
+                          )
+                        }
+                        style={[
+                          styles.genderChip,
+                          selected &&
+                            styles.genderChipOn,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.genderText,
+                            selected &&
+                              styles.genderTextOn,
+                          ]}
+                        >
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </SurfaceCard>
+        ) : null}
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() =>
+            setShowMeasurements(
+              value => !value
+            )
+          }
+          style={styles.disclosure}
+        >
+          <View
+            style={
+              styles.disclosureIcon
+            }
+          >
+            <Ionicons
+              name="fitness-outline"
+              size={19}
+              color={ui.color.brand}
             />
           </View>
-        </View>
-      </View>
 
-      {/* Submit Button */}
-      <TouchableOpacity
-        style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-        onPress={handleSubmit}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.submitButtonText}>
-            {isEditing ? 'Update Client' : 'Add Client'}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+          <View
+            style={
+              styles.disclosureCopy
+            }
+          >
+            <Text
+              style={
+                styles.disclosureTitle
+              }
+            >
+              Body measurements
+            </Text>
+            <Text
+              style={
+                styles.disclosureSubtitle
+              }
+            >
+              Weight, height, chest and
+              waist - optional
+            </Text>
+          </View>
+
+          <Ionicons
+            name={
+              showMeasurements
+                ? 'chevron-up'
+                : 'chevron-down'
+            }
+            size={20}
+            color={ui.color.textMuted}
+          />
+        </TouchableOpacity>
+
+        {showMeasurements ? (
+          <SurfaceCard
+            style={styles.card}
+          >
+            <View style={styles.twoCol}>
+              <View style={styles.flex}>
+                <Field
+                  label="Weight (kg)"
+                  value={
+                    formData.weight
+                  }
+                  onChangeText={value =>
+                    setField(
+                      'weight',
+                      value
+                    )
+                  }
+                  placeholder="75"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.flex}>
+                <Field
+                  label="Height (cm)"
+                  value={
+                    formData.height
+                  }
+                  onChangeText={value =>
+                    setField(
+                      'height',
+                      value
+                    )
+                  }
+                  placeholder="175"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+
+            {bmi ? (
+              <View
+                style={
+                  styles.bmiSummary
+                }
+              >
+                <View>
+                  <Text
+                    style={
+                      styles.bmiLabel
+                    }
+                  >
+                    CALCULATED BMI
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.bmiValue
+                    }
+                  >
+                    {bmi.toFixed(1)}
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    styles.bmiHint
+                  }
+                >
+                  Stored with the member
+                  profile
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.twoCol}>
+              <View style={styles.flex}>
+                <Field
+                  label="Chest (cm)"
+                  value={
+                    formData.chest
+                  }
+                  onChangeText={value =>
+                    setField(
+                      'chest',
+                      value
+                    )
+                  }
+                  placeholder="Optional"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.flex}>
+                <Field
+                  label="Waist (cm)"
+                  value={
+                    formData.waist
+                  }
+                  onChangeText={value =>
+                    setField(
+                      'waist',
+                      value
+                    )
+                  }
+                  placeholder="Optional"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+          </SurfaceCard>
+        ) : null}
+
+        {!isConnected ? (
+          <View style={styles.offlineNote}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={18}
+              color={
+                ui.color.warning
+              }
+            />
+            <Text
+              style={
+                styles.offlineText
+              }
+            >
+              Offline: member profile
+              changes can be queued, but
+              a new photo cannot upload
+              until you reconnect.
+            </Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            isEditing
+              ? 'Save member changes'
+              : 'Add member'
+          }
+          disabled={isLoading}
+          onPress={submit}
+          style={[
+            styles.primaryButton,
+            isLoading &&
+              styles.primaryDisabled,
+          ]}
+        >
+          {isLoading ? (
+            <ActivityIndicator
+              color="#FFFFFF"
+            />
+          ) : (
+            <>
+              <Ionicons
+                name={
+                  isEditing
+                    ? 'checkmark-circle-outline'
+                    : 'person-add-outline'
+                }
+                size={20}
+                color="#FFFFFF"
+              />
+
+              <Text
+                style={
+                  styles.primaryText
+                }
+              >
+                {isEditing
+                  ? 'Save changes'
+                  : 'Add member'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.footerHint}>
+          Membership plan and fee can be
+          added after the member profile
+          is created.
+        </Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const Field = ({
+  label,
+  required = false,
+  ...props
+}: {
+  label: string;
+  required?: boolean;
+} & React.ComponentProps<
+  typeof TextInput
+>) => (
+  <View style={styles.field}>
+    <Text style={styles.label}>
+      {label}
+      {required ? (
+        <Text style={styles.required}>
+          {' '}*
+        </Text>
+      ) : null}
+    </Text>
+
+    <TextInput
+      {...props}
+      style={styles.input}
+      placeholderTextColor={
+        ui.color.textMuted
+      }
+    />
+  </View>
+);
+
+const styles = createAdaptiveStyles({
+  page: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-    padding: 16,
+    backgroundColor: ui.color.canvas,
   },
-  header: {
-    marginBottom: 24,
+
+  content: {
+    padding: ui.space.lg,
+    paddingBottom: 42,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 8,
+
+  hero: {
+    backgroundColor:
+      ui.color.brandStrong,
+    borderRadius: ui.radius.xl,
+    padding: ui.space.xl,
+    marginBottom: ui.space.md,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  row: {
+
+  heroTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  submitButton: {
-    backgroundColor: '#3B82F6',
-    padding: 16,
-    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 32,
+    justifyContent:
+      'space-between',
   },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  photoContainer: {
+
+  backButton: {
+    width: ui.touch.min,
+    height: ui.touch.min,
+    marginLeft: -12,
     alignItems: 'center',
-    position: 'relative',
-  },
-  photoButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
   },
-  clientPhoto: {
+
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: ui.type.page,
+    fontWeight: '900',
+    marginTop: ui.space.md,
+  },
+
+  heroSubtitle: {
+    color: '#E0E7FF',
+    fontSize: ui.type.bodySm,
+    lineHeight: 17,
+    marginTop: ui.space.xs,
+  },
+
+  errorBox: {
+    backgroundColor:
+      ui.color.dangerSoft,
+    borderWidth: 1,
+    borderColor:
+      ui.color.dangerBorder,
+    borderRadius: ui.radius.md,
+    padding: ui.space.md,
+    flexDirection: 'row',
+    gap: ui.space.sm,
+    alignItems: 'flex-start',
+    marginBottom: ui.space.md,
+  },
+
+  errorText: {
+    flex: 1,
+    color: ui.color.danger,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '700',
+  },
+
+  photoCard: {
+    padding: ui.space.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: ui.space.md,
+  },
+
+  photoButton: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginRight: ui.space.md,
+  },
+
+  photo: {
     width: '100%',
     height: '100%',
-    borderRadius: 60,
   },
+
   photoPlaceholder: {
+    flex: 1,
+    backgroundColor:
+      ui.color.brandSoft,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  photoText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#6B7280',
+
+  photoCopy: {
+    flex: 1,
   },
-  removePhotoButton: {
-    position: 'absolute',
-    top: 0,
-    right: 80,
-    backgroundColor: 'white',
-    borderRadius: 12,
+
+  photoTitle: {
+    color: ui.color.text,
+    fontSize: 13,
+    fontWeight: '900',
   },
-  bmiContainer: {
+
+  photoSubtitle: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  photoActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: ui.space.sm,
+    marginTop: ui.space.sm,
+  },
+
+  smallButton: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor:
+      ui.color.brandSoft,
+    justifyContent: 'center',
+  },
+
+  smallButtonText: {
+    color: ui.color.brand,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  removeButton: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor:
+      ui.color.dangerSoft,
+    justifyContent: 'center',
+  },
+
+  removeText: {
+    color: ui.color.danger,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  card: {
+    padding: ui.space.lg,
+    marginBottom: ui.space.md,
+  },
+
+  field: {
+    marginBottom: ui.space.md,
+  },
+
+  label: {
+    color: ui.color.textSecondary,
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 7,
+  },
+
+  required: {
+    color: ui.color.danger,
+  },
+
+  input: {
+    minHeight: ui.touch.min,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    backgroundColor:
+      ui.color.surfaceSubtle,
+    borderRadius: ui.radius.md,
+    paddingHorizontal: ui.space.md,
+    paddingVertical: 11,
+    color: ui.color.text,
+    fontSize: 13,
+  },
+
+  disclosure: {
+    minHeight: 64,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.lg,
+    padding: ui.space.md,
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: ui.space.md,
   },
+
+  disclosureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor:
+      ui.color.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.md,
+  },
+
+  disclosureCopy: {
+    flex: 1,
+  },
+
+  disclosureTitle: {
+    color: ui.color.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  disclosureSubtitle: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    marginTop: 3,
+  },
+
+  twoCol: {
+    flexDirection: 'row',
+    gap: ui.space.sm,
+  },
+
+  flex: {
+    flex: 1,
+  },
+
+  genderRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+
+  genderChip: {
+    minHeight: 36,
+    paddingHorizontal: 9,
+    borderRadius: ui.radius.pill,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  genderChipOn: {
+    backgroundColor:
+      ui.color.brandSoft,
+    borderColor:
+      ui.color.brandBorder,
+  },
+
+  genderText: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  genderTextOn: {
+    color: ui.color.brand,
+  },
+
+  bmiSummary: {
+    backgroundColor:
+      ui.color.successSoft,
+    borderWidth: 1,
+    borderColor:
+      ui.color.successBorder,
+    borderRadius: ui.radius.md,
+    padding: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'space-between',
+    marginBottom: ui.space.md,
+  },
+
   bmiLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+    color: ui.color.success,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
+
   bmiValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#6366F1',
+    color: ui.color.success,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+
+  bmiHint: {
+    maxWidth: 150,
+    textAlign: 'right',
+    color: ui.color.success,
+    fontSize: 9,
+    lineHeight: 13,
+  },
+
+  offlineNote: {
+    backgroundColor:
+      ui.color.warningSoft,
+    borderWidth: 1,
+    borderColor:
+      ui.color.warningBorder,
+    borderRadius: ui.radius.md,
+    padding: ui.space.md,
+    flexDirection: 'row',
+    gap: ui.space.sm,
+    alignItems: 'flex-start',
+    marginBottom: ui.space.md,
+  },
+
+  offlineText: {
+    flex: 1,
+    color: ui.color.warning,
+    fontSize: 9,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+
+  primaryButton: {
+    minHeight: 56,
+    borderRadius: 15,
+    backgroundColor: ui.color.brand,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: ui.space.sm,
+  },
+
+  primaryDisabled: {
+    opacity: 0.65,
+  },
+
+  primaryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  footerHint: {
+    color: ui.color.textMuted,
+    fontSize: 9,
+    lineHeight: 14,
+    textAlign: 'center',
+    paddingHorizontal: ui.space.lg,
+    marginTop: ui.space.sm,
   },
 });
 

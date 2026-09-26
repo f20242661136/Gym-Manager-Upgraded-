@@ -1,3 +1,4 @@
+import { ui } from '../ui/theme';
 import React, { useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -125,7 +126,7 @@ const GymSetupScreen: React.FC = () => {
           </View>
 
           <Text style={styles.marketHint}>
-            {market.currency} Ã¢â‚¬Â¢ {market.timezone} Ã¢â‚¬Â¢ {market.callingCode}
+            {market.currency}  -  {market.timezone}  -  {market.callingCode}
           </Text>
 
           <TextInput
@@ -134,7 +135,9 @@ const GymSetupScreen: React.FC = () => {
             onChangeText={setName}
             placeholder="Gym name"
             autoCapitalize="words"
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <TextInput
             style={styles.input}
@@ -143,7 +146,9 @@ const GymSetupScreen: React.FC = () => {
             placeholder="Slug (optional, auto-generated from name)"
             autoCapitalize="none"
             autoCorrect={false}
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <Text style={styles.previewText}>
             Slug preview: {generatedSlug || 'gym-name'}
@@ -155,7 +160,9 @@ const GymSetupScreen: React.FC = () => {
             onChangeText={setPhone}
             placeholder={`Phone (${market.callingCode})`}
             keyboardType="phone-pad"
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <TextInput
             style={styles.input}
@@ -164,7 +171,9 @@ const GymSetupScreen: React.FC = () => {
             placeholder="Email"
             keyboardType="email-address"
             autoCapitalize="none"
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <TextInput
             style={styles.input}
@@ -174,7 +183,9 @@ const GymSetupScreen: React.FC = () => {
             multiline
             numberOfLines={3}
             textAlignVertical="top"
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <TouchableOpacity
             style={[styles.primaryButton, isSubmitting && styles.disabledButton]}

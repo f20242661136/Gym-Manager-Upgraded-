@@ -1,79 +1,146 @@
-import React, { useEffect, useRef } from 'react';
+import React, {
+  useEffect,
+  useRef,
+} from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AppState, AppStateStatus } from 'react-native';
+import {
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
+import {
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import {
+  AppState,
+  AppStateStatus,
+} from 'react-native';
 import * as Notifications from 'expo-notifications';
+
 import AppNavigator from './src/navigation/AppNavigator';
 import { notificationService } from './src/services/notifications';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { GymProvider } from './src/contexts/GymContext';
+import { SyncProvider } from './src/contexts/SyncContext';
+import { SyncStatusBanner } from './src/components/SyncStatusBanner';
+import { ProductionErrorBoundary } from './src/components/ProductionErrorBoundary';
+import { initializeTelemetry } from './src/services/telemetry';
+import { logger } from './src/services/logger';
+
+initializeTelemetry();
 
 export default function App() {
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const notificationListener =
+    useRef<
+      Notifications.Subscription | null
+    >(null);
+
+  const responseListener =
+    useRef<
+      Notifications.Subscription | null
+    >(null);
 
   useEffect(() => {
-    // Initialize notification service with Supabase realtime subscription and without remote push
-    notificationService.initialize({ enableRemotePush: false, subscribeSupabase: true }).catch(e => console.error(e));
+    notificationService
+      .initialize({
+        enableRemotePush: false,
+        subscribeSupabase: true,
+      })
+      .catch(error =>
+        logger.error(
+          'Notification service initialization failed',
+          error
+        )
+      );
 
-    // Listen for app state changes to check membership expirations when app comes to foreground
-    const appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // App has come to the foreground, check for expired memberships
-        notificationService.checkMembershipExpirations().catch(e => console.error('Error checking membership expirations on app resume:', e));
-      }
-    });
+    const appStateSubscription =
+      AppState.addEventListener(
+        'change',
+        (
+          nextAppState:
+            AppStateStatus
+        ) => {
+          if (
+            nextAppState ===
+            'active'
+          ) {
+            notificationService
+              .checkMembershipExpirations()
+              .catch(error =>
+                logger.error(
+                  'Membership expiry check failed',
+                  error
+                )
+              );
+          }
+        }
+      );
 
-    // Listen for incoming notifications while app is foregrounded
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
-    });
+    notificationListener.current =
+      Notifications
+        .addNotificationReceivedListener(
+          notification => {
+            logger.debug(
+              'Notification received',
+              {
+                identifier:
+                  notification
+                    .request
+                    .identifier,
+              }
+            );
+          }
+        );
 
-    // Listen for notification responses
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification response:', response);
-      // Handle notification tap - you could navigate to specific screens
-      const data = response.notification.request.content.data;
+    responseListener.current =
+      Notifications
+        .addNotificationResponseReceivedListener(
+          response => {
+            const data =
+              response.notification
+                .request.content.data;
 
-      if (data.type === 'payment_reminder' && data.clientId) {
-        // Navigate to client detail screen
-        // You'd need to use navigation ref here
-      }
-
-      if (data.type === 'membership_expired' && data.clientId) {
-        // Navigate to client detail screen for renewal
-        console.log('Membership expired for client:', data.clientId);
-      }
-
-      if (data.type === 'membership_expiring' && data.clientId) {
-        // Navigate to client detail screen for renewal
-        console.log('Membership expiring soon for client:', data.clientId);
-      }
-    });
+            logger.debug(
+              'Notification opened',
+              {
+                type:
+                  data?.type,
+                hasClientId:
+                  Boolean(
+                    data?.clientId
+                  ),
+              }
+            );
+          }
+        );
 
     return () => {
-      if (appStateSubscription && typeof appStateSubscription.remove === 'function') {
-        appStateSubscription.remove();
-      }
-      if (notificationListener.current && typeof notificationListener.current.remove === 'function') {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current && typeof responseListener.current.remove === 'function') {
-        responseListener.current.remove();
-      }
+      appStateSubscription.remove();
+
+      notificationListener.current
+        ?.remove();
+
+      responseListener.current
+        ?.remove();
     };
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView
+      style={{ flex: 1 }}
+    >
       <SafeAreaProvider>
-        <AuthProvider>
-          <GymProvider>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </GymProvider>
-        </AuthProvider>
+        <ProductionErrorBoundary>
+          <AuthProvider>
+            <GymProvider>
+              <SyncProvider>
+                <StatusBar
+                  style="auto"
+                />
+                <AppNavigator />
+                <SyncStatusBanner />
+              </SyncProvider>
+            </GymProvider>
+          </AuthProvider>
+        </ProductionErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

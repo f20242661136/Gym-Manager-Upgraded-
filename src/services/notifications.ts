@@ -9,6 +9,7 @@ import { api } from './api';
 import { Client } from '../types/index';
 import { supabase } from './supabase';
 import { storage } from './storage';
+import { getCurrentGymId } from './gymService';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -87,64 +88,192 @@ export const notificationService = {
     return token.data;
   },
 
-  async schedulePaymentReminder(clientId: string, clientName: string, dueDate: Date) {
-    if (!(await this.areNotificationsEnabled())) return;
-
-    const seconds = Math.max(1, Math.floor((dueDate.getTime() - Date.now()) / 1000));
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Payment Reminder',
-        body: `Payment due for ${clientName}`,
-        sound: 'default',
-        data: { type: 'payment_reminder', clientId },
-      },
-      // use seconds trigger to be compatible with Expo's NotificationTriggerInput
-      trigger: { seconds } as any,
-    });
-  },
-
-  async schedulePaymentNotification(clientId: string, clientName: string, duration: number) {
-    if (!(await this.areNotificationsEnabled())) return;
-
-    const now = new Date();
-    const expiryDate = new Date(now);
-    expiryDate.setDate(expiryDate.getDate() + duration);
-
-    // Notification 1: 3 days before expiry or 1 day before if duration < 3
-    const notifyBeforeDays = duration < 3 ? 1 : 3;
-    const notifyBeforeDate = new Date(expiryDate);
-    notifyBeforeDate.setDate(expiryDate.getDate() - notifyBeforeDays);
-
-    if (notifyBeforeDate > now) {
-      const secondsBefore = Math.max(1, Math.floor((notifyBeforeDate.getTime() - Date.now()) / 1000));
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Membership Expiry Warning',
-          body: `Membership for ${clientName} will expire in ${notifyBeforeDays} day${notifyBeforeDays > 1 ? 's' : ''}.`,
-          sound: 'default',
-          data: { type: 'membership_expiry_warning', clientId },
-        },
-        trigger: { seconds: secondsBefore } as any,
-      });
+  async schedulePaymentReminder(
+    clientId: string,
+    clientName: string,
+    dueDate: Date
+  ) {
+    if (
+      !(
+        await this
+          .areNotificationsEnabled()
+      )
+    ) {
+      return;
     }
 
-    // Notification 2: On expiry date
-    if (expiryDate > now) {
-      const secondsExpiry = Math.max(1, Math.floor((expiryDate.getTime() - Date.now()) / 1000));
-      await Notifications.scheduleNotificationAsync({
+    const target =
+      new Date(dueDate);
+
+    if (
+      Number.isNaN(
+        target.getTime()
+      ) ||
+      target.getTime() <=
+        Date.now()
+    ) {
+      return;
+    }
+
+    await Notifications
+      .scheduleNotificationAsync({
         content: {
-          title: 'Membership Expired',
-          body: `Membership for ${clientName} has expired today.`,
+          title:
+            'Payment reminder',
+          body:
+            `Payment due for ${clientName}`,
           sound: 'default',
-          data: { type: 'membership_expired', clientId },
+          data: {
+            type:
+              'payment_reminder',
+            clientId,
+          },
         },
-        trigger: { seconds: secondsExpiry } as any,
+        trigger: {
+          type:
+            Notifications
+              .SchedulableTriggerInputTypes
+              .DATE,
+          date: target,
+          channelId:
+            Platform.OS ===
+            'android'
+              ? 'default'
+              : undefined,
+        },
       });
+  },
+
+  async schedulePaymentNotification(
+    clientId: string,
+    clientName: string,
+    duration: number
+  ) {
+    if (
+      !(
+        await this
+          .areNotificationsEnabled()
+      )
+    ) {
+      return;
+    }
+
+    const safeDuration =
+      Math.max(
+        1,
+        Math.round(duration)
+      );
+
+    const now =
+      new Date();
+
+    const expiryDate =
+      new Date(now);
+
+    expiryDate.setDate(
+      expiryDate.getDate() +
+        safeDuration
+    );
+
+    // Membership notifications should be tied to a local calendar
+    // date rather than the exact second a fee was received.
+    expiryDate.setHours(
+      9,
+      0,
+      0,
+      0
+    );
+
+    const notifyBeforeDays =
+      safeDuration < 3
+        ? 1
+        : 3;
+
+    const warningDate =
+      new Date(
+        expiryDate
+      );
+
+    warningDate.setDate(
+      warningDate.getDate() -
+        notifyBeforeDays
+    );
+
+    if (
+      warningDate.getTime() >
+      now.getTime()
+    ) {
+      await Notifications
+        .scheduleNotificationAsync({
+          content: {
+            title:
+              'Renewal coming up',
+            body:
+              `${clientName}'s membership expires in ${notifyBeforeDays} day${notifyBeforeDays === 1 ? '' : 's'}.`,
+            sound: 'default',
+            data: {
+              type:
+                'membership_expiry_warning',
+              clientId,
+            },
+          },
+          trigger: {
+            type:
+              Notifications
+                .SchedulableTriggerInputTypes
+                .DATE,
+            date:
+              warningDate,
+            channelId:
+              Platform.OS ===
+              'android'
+                ? 'default'
+                : undefined,
+          },
+        });
+    }
+
+    if (
+      expiryDate.getTime() >
+      now.getTime()
+    ) {
+      await Notifications
+        .scheduleNotificationAsync({
+          content: {
+            title:
+              'Membership expired',
+            body:
+              `${clientName}'s membership expires today. Review renewal at the front desk.`,
+            sound: 'default',
+            data: {
+              type:
+                'membership_expired',
+              clientId,
+            },
+          },
+          trigger: {
+            type:
+              Notifications
+                .SchedulableTriggerInputTypes
+                .DATE,
+            date:
+              expiryDate,
+            channelId:
+              Platform.OS ===
+              'android'
+                ? 'default'
+                : undefined,
+          },
+        });
     }
   },
 
   async checkMembershipExpirations() {
     try {
+      // STAB_THEME_GYM_GUARD
+      if (!(await getCurrentGymId())) {
+        return [];
+      }
       const clients = await api.getClients();
       const now = new Date();
       const expiredClients: Client[] = [];
@@ -193,55 +322,194 @@ export const notificationService = {
 
   async scheduleMembershipExpiryReminders() {
     try {
-      if (!(await this.areNotificationsEnabled())) return;
+      if (!(await getCurrentGymId())) {
+        return;
+      }
+      if (
+        !(
+          await this
+            .areNotificationsEnabled()
+        )
+      ) {
+        return;
+      }
 
-      const clients = await api.getClients();
-      const now = new Date();
+      // Rebuild these reminders from current member data every time.
+      // This prevents duplicate reminders accumulating across launches.
+      const existing =
+        await Notifications
+          .getAllScheduledNotificationsAsync();
 
-      for (const client of clients) {
-        if (client.membershipDueDate) {
-          const dueDate = new Date(client.membershipDueDate);
+      const rebuiltTypes =
+        new Set([
+          'membership_expiring',
+          'membership_expiring_urgent',
+          'daily_expired_memberships',
+        ]);
 
-          // Schedule reminder 3 days before expiry
-          const reminderDate = new Date(dueDate);
-          reminderDate.setDate(reminderDate.getDate() - 3);
+      for (
+        const notification
+        of existing
+      ) {
+        const type =
+          notification
+            .content
+            .data
+            ?.type;
 
-          if (reminderDate > now) {
-            const seconds = Math.max(1, Math.floor((reminderDate.getTime() - Date.now()) / 1000));
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                title: 'Membership Expiring Soon',
-                body: `${client.name}'s membership expires in 3 days. Consider renewing.`,
-                sound: 'default',
-                  data: { type: 'membership_expiring', clientId: client.id },
-                },
-              trigger: { seconds } as any,
-            });
-          }
-
-          // Schedule reminder 1 day before expiry
-          const urgentReminderDate = new Date(dueDate);
-          urgentReminderDate.setDate(urgentReminderDate.getDate() - 1);
-
-          if (urgentReminderDate > now) {
-            const seconds = Math.max(1, Math.floor((urgentReminderDate.getTime() - Date.now()) / 1000));
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                title: 'Membership Expires Tomorrow',
-                body: `${client.name}'s membership expires tomorrow. Please renew.`,
-                sound: 'default',
-                  data: { type: 'membership_expiring_urgent', clientId: client.id },
-                },
-              trigger: { seconds } as any,
-            });
-          }
+        if (
+          typeof type ===
+            'string' &&
+          rebuiltTypes.has(
+            type
+          )
+        ) {
+          await Notifications
+            .cancelScheduledNotificationAsync(
+              notification.identifier
+            );
         }
       }
 
-      // Schedule daily reminders for expired memberships
-      await this.scheduleDailyExpiredMembershipReminders();
+      const clients =
+        await api.getClients();
+
+      const now =
+        new Date();
+
+      for (
+        const client
+        of clients
+      ) {
+        if (
+          !client
+            .membershipDueDate
+        ) {
+          continue;
+        }
+
+        const dueDate =
+          new Date(
+            client
+              .membershipDueDate
+          );
+
+        if (
+          Number.isNaN(
+            dueDate.getTime()
+          )
+        ) {
+          continue;
+        }
+
+        // Keep reminders on a predictable local front-desk hour.
+        dueDate.setHours(
+          9,
+          0,
+          0,
+          0
+        );
+
+        const threeDay =
+          new Date(
+            dueDate
+          );
+
+        threeDay.setDate(
+          threeDay.getDate() -
+            3
+        );
+
+        if (
+          threeDay.getTime() >
+          now.getTime()
+        ) {
+          await Notifications
+            .scheduleNotificationAsync({
+              content: {
+                title:
+                  'Renewal coming up',
+                body:
+                  `${client.name}'s membership expires in 3 days.`,
+                sound:
+                  'default',
+                data: {
+                  type:
+                    'membership_expiring',
+                  clientId:
+                    client.id,
+                },
+              },
+              trigger: {
+                type:
+                  Notifications
+                    .SchedulableTriggerInputTypes
+                    .DATE,
+                date:
+                  threeDay,
+                channelId:
+                  Platform.OS ===
+                  'android'
+                    ? 'default'
+                    : undefined,
+              },
+            });
+        }
+
+        const oneDay =
+          new Date(
+            dueDate
+          );
+
+        oneDay.setDate(
+          oneDay.getDate() -
+            1
+        );
+
+        if (
+          oneDay.getTime() >
+          now.getTime()
+        ) {
+          await Notifications
+            .scheduleNotificationAsync({
+              content: {
+                title:
+                  'Membership expires tomorrow',
+                body:
+                  `${client.name}'s membership expires tomorrow.`,
+                sound:
+                  'default',
+                data: {
+                  type:
+                    'membership_expiring_urgent',
+                  clientId:
+                    client.id,
+                },
+              },
+              trigger: {
+                type:
+                  Notifications
+                    .SchedulableTriggerInputTypes
+                    .DATE,
+                date:
+                  oneDay,
+                channelId:
+                  Platform.OS ===
+                  'android'
+                    ? 'default'
+                    : undefined,
+              },
+            });
+        }
+      }
+
+      await this
+        .scheduleDailyExpiredMembershipReminders();
     } catch (error) {
-      console.error('Error scheduling membership expiry reminders:', error);
+      console.error(
+        'Error scheduling membership expiry reminders:',
+        error
+      );
     }
   },
 
@@ -301,59 +569,121 @@ export const notificationService = {
   // Schedule daily reminders for expired memberships (when app is closed)
   async scheduleDailyExpiredMembershipReminders() {
     try {
-      if (!(await this.areNotificationsEnabled())) return;
+      if (!(await getCurrentGymId())) {
+        return;
+      }
+      if (
+        !(
+          await this
+            .areNotificationsEnabled()
+        )
+      ) {
+        return;
+      }
 
-      // Cancel any existing daily expired membership reminders
-      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-      for (const notification of scheduledNotifications) {
-        const type = notification.content.data?.type;
-        if (type === 'daily_expired_memberships') {
-          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+      const scheduled =
+        await Notifications
+          .getAllScheduledNotificationsAsync();
+
+      for (
+        const notification
+        of scheduled
+      ) {
+        const type =
+          notification
+            .content
+            .data
+            ?.type;
+
+        if (
+          type ===
+          'daily_expired_memberships'
+        ) {
+          await Notifications
+            .cancelScheduledNotificationAsync(
+              notification.identifier
+            );
         }
       }
 
-      const clients = await api.getClients();
-      const expiredCount = clients.filter(client =>
-        client.membershipDueDate &&
-        new Date(client.membershipDueDate) < new Date() &&
-        client.membershipStatus === 'Unpaid'
-      ).length;
+      const clients =
+        await api.getClients();
 
-      if (expiredCount > 0) {
-        // Schedule daily reminder at 9 AM
-        const now = new Date();
-        const next9AM = new Date(now);
-        next9AM.setHours(9, 0, 0, 0);
+      const now =
+        new Date();
 
-        // If it's already past 9 AM today, schedule for tomorrow
-        if (now >= next9AM) {
-          next9AM.setDate(next9AM.getDate() + 1);
-        }
+      const expiredCount =
+        clients.filter(
+          client => {
+            if (
+              !client
+                .membershipDueDate
+            ) {
+              return false;
+            }
 
-        const secondsUntilReminder = Math.max(1, Math.floor((next9AM.getTime() - now.getTime()) / 1000));
+            const due =
+              new Date(
+                client
+                  .membershipDueDate
+              );
 
-        await Notifications.scheduleNotificationAsync({
+            return (
+              !Number.isNaN(
+                due.getTime()
+              ) &&
+              due.getTime() <
+                now.getTime() &&
+              client
+                .membershipStatus ===
+                'Unpaid'
+            );
+          }
+        ).length;
+
+      if (
+        expiredCount === 0
+      ) {
+        return;
+      }
+
+      await Notifications
+        .scheduleNotificationAsync({
           content: {
-            title: 'Expired Memberships Reminder',
-            body: `You have ${expiredCount} client${expiredCount > 1 ? 's' : ''} with expired memberships. Please renew them.`,
+            title:
+              'Expired memberships',
+            body:
+              `${expiredCount} member${expiredCount === 1 ? '' : 's'} need renewal.`,
             sound: 'default',
-            data: { type: 'daily_expired_memberships', count: expiredCount },
+            data: {
+              type:
+                'daily_expired_memberships',
+              count:
+                expiredCount,
+            },
           },
           trigger: {
-            seconds: secondsUntilReminder,
-            repeats: true,
-            // Schedule to repeat daily at 9 AM
+            type:
+              Notifications
+                .SchedulableTriggerInputTypes
+                .DAILY,
             hour: 9,
             minute: 0,
-          } as any,
+            channelId:
+              Platform.OS ===
+              'android'
+                ? 'default'
+                : undefined,
+          },
         });
-      }
     } catch (error) {
-      console.error('Error scheduling daily expired membership reminders:', error);
+      console.error(
+        'Error scheduling daily expired membership reminders:',
+        error
+      );
     }
   },
 
-  // Re-schedule all membership expiry reminders (call this after payment updates)
   async rescheduleMembershipReminders() {
     // Cancel existing membership-related notifications
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
@@ -372,11 +702,11 @@ export const notificationService = {
   async initialize(opts: { enableRemotePush?: boolean; subscribeSupabase?: boolean } = {}) {
     const { enableRemotePush = false, subscribeSupabase = true } = opts;
 
-    // Ensure Android channel exists as early as possible so scheduled notifications use it
-    await this.ensureAndroidChannel();
-
-    // Register for push notifications (remote only if enabled)
-    await this.registerForPushNotifications(enableRemotePush);
+    if (enableRemotePush) {
+      await this.registerForPushNotifications(true);
+    } else {
+      await this.ensureAndroidChannel();
+    }
 
     // Schedule expiry reminders for existing clients
     await this.scheduleMembershipExpiryReminders();

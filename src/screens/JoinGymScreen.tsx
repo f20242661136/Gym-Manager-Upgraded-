@@ -1,3 +1,4 @@
+import { ui } from '../ui/theme';
 import React, { useState } from 'react';
 import {
   View,
@@ -82,7 +83,9 @@ const JoinGymScreen: React.FC = () => {
           autoCorrect={false}
           maxLength={20}
           onSubmitEditing={handleJoinGym}
-        />
+        
+      placeholderTextColor={ui.color.textMuted}
+    />
 
         <TouchableOpacity
           style={[

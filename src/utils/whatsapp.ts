@@ -1,0 +1,7 @@
+import { Linking } from 'react-native';
+import { normalizePhoneE164,type MarketCountry } from './phone';
+import type { PaymentReceipt } from '../types/receipt';
+export const openWhatsApp=async(phone:string|null|undefined,country:MarketCountry,message:string)=>{const n=normalizePhoneE164(phone,country);if(!n)throw new Error('The member phone number is not valid for WhatsApp.');await Linking.openURL(`https://wa.me/${n.replace(/\D/g,'')}?text=${encodeURIComponent(message)}`);};
+export const receiptWhatsAppMessage=(r:PaymentReceipt)=>[`Payment received - ${r.gym.name}`,'',`Receipt: ${r.payment.receiptNumber}`,`Member: ${r.client.name}`,`Amount: ${r.gym.currencyCode==='INR'?'₹':'Rs.'} ${r.payment.amount.toLocaleString()}`,r.plan?.name?`Plan: ${r.plan.name}`:null,r.membership?.endDate?`Valid until: ${new Date(r.membership.endDate).toLocaleDateString()}`:null,'','Thank you.'].filter(Boolean).join('\n');
+export const renewalWhatsAppMessage=(gym:string,name:string,due?:string|null)=>`Hi ${name},\n\nA reminder from ${gym}: your gym membership ${due?`is due on ${new Date(due).toLocaleDateString()}`:'needs renewal'}.\n\nPlease contact the gym or visit reception to renew.\n\nThank you - ${gym}`;
+export const welcomeWhatsAppMessage=(gym:string,name:string)=>`Welcome to ${gym}, ${name}!\n\nYour membership profile has been created. We are happy to have you at ${gym}.`;

@@ -1,0 +1,3 @@
+export type MarketCountry='PK'|'IN';
+const digits=(v:string)=>v.replace(/\D/g,'');
+export const normalizePhoneE164=(v:string|null|undefined,c:MarketCountry):string|null=>{if(!v)return null;let d=digits(v);if(c==='PK'){if(d.startsWith('0092'))d=d.slice(2);if(d.startsWith('92')&&d.length===12)return `+${d}`;if(d.startsWith('0')&&d.length===11)return `+92${d.slice(1)}`;if(d.startsWith('3')&&d.length===10)return `+92${d}`;return null;}if(d.startsWith('0091'))d=d.slice(2);if(d.startsWith('91')&&d.length===12)return `+${d}`;if(d.startsWith('0')&&d.length===11)return `+91${d.slice(1)}`;if(d.length===10)return `+91${d}`;return null;};

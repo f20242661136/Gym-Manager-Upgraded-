@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Client, Payment, DashboardStats } from '../types/index';
 import { storage } from './storage';
+import { offlineQueue, createOfflineUuid } from './offlineQueue';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { getCurrentGymId } from './gymService';
 
@@ -30,6 +31,37 @@ const requireActiveGymId = async (): Promise<string> => {
   return activeGymId;
 };
 
+
+const resolvePrivatePhotoUrl = async (
+  photoPath?: string | null,
+  fallbackUrl?: string | null
+): Promise<string> => {
+  if (!photoPath) {
+    return fallbackUrl || '';
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase.storage
+    .from('client-photos-private')
+    .createSignedUrl(
+      photoPath,
+      7 * 24 * 60 * 60
+    );
+
+  if (error) {
+    console.warn(
+      'Could not refresh member photo URL:',
+      error.message
+    );
+
+    return fallbackUrl || '';
+  }
+
+  return data.signedUrl;
+};
+
 export const api = {
   // Client APIs
   getClients: async (): Promise<Client[]> => {
@@ -44,7 +76,11 @@ export const api = {
       if (error) throw error;
 
       // Convert from Supabase snake_case to our camelCase
-      const clients: Client[] = data?.map(item => ({
+      const clients: Client[] =
+        await Promise.all(
+          (data || []).map(
+            async item => ({
+
         id: item.id,
         name: item.name,
         phone: item.phone,
@@ -56,11 +92,23 @@ export const api = {
         chest: item.chest,
         waist: item.waist,
         bmi: item.bmi,
-        photoUrl: item.photo_url,
+        photoUrl:
+          await resolvePrivatePhotoUrl(
+            (item as any).photo_path,
+            item.photo_url
+          ),
+        photoPath:
+          (item as any).photo_path ?? null,
         membershipStatus: item.membership_status,
         registrationDate: item.registration_date,
         membershipDueDate: item.membership_due_date,
-      })) || [];
+        serverUpdatedAt: (item as any).updated_at ?? null,
+        syncVersion: (item as any).sync_version ?? null,
+        syncState: 'synced',
+      
+            })
+          )
+        );
 
       // Cache for offline use
       await storage.saveClients(clients);
@@ -97,10 +145,19 @@ export const api = {
         chest: data.chest,
         waist: data.waist,
         bmi: data.bmi,
-        photoUrl: data.photo_url,
+        photoUrl:
+          await resolvePrivatePhotoUrl(
+            (data as any).photo_path,
+            data.photo_url
+          ),
+        photoPath:
+          (data as any).photo_path ?? null,
         membershipStatus: data.membership_status,
         registrationDate: data.registration_date,
         membershipDueDate: data.membership_due_date,
+        serverUpdatedAt: (data as any).updated_at ?? null,
+        syncVersion: (data as any).sync_version ?? null,
+        syncState: 'synced',
       } : undefined;
     } catch (error) {
       console.error('Error fetching client:', error);
@@ -110,28 +167,31 @@ export const api = {
   },
 
   addClient: async (client: Omit<Client, 'id'>, isConnected: boolean): Promise<Client> => {
+    const activeGymId = await requireActiveGymId();
+    const clientId = createOfflineUuid();
+
+    const clientData = {
+      id: clientId,
+      gym_id: activeGymId,
+      name: client.name,
+      phone: client.phone,
+      email: client.email,
+      age: client.age,
+      gender: client.gender,
+      weight: client.weight,
+      height: client.height,
+      chest: client.chest,
+      waist: client.waist,
+      bmi: client.bmi,
+      photo_url: client.photoUrl,
+      photo_path:
+        client.photoPath ?? null,
+      membership_status: client.membershipStatus,
+      registration_date: client.registrationDate,
+      membership_due_date: toNullableTimestamp(client.membershipDueDate),
+    };
+
     try {
-      const activeGymId = await requireActiveGymId();
-
-      // Convert to snake_case for Supabase
-      const clientData = {
-        gym_id: activeGymId,
-        name: client.name,
-        phone: client.phone,
-        email: client.email,
-        age: client.age,
-        gender: client.gender,
-        weight: client.weight,
-        height: client.height,
-        chest: client.chest,
-        waist: client.waist,
-        bmi: client.bmi,
-        photo_url: client.photoUrl,
-        membership_status: client.membershipStatus,
-        registration_date: client.registrationDate,
-        membership_due_date: toNullableTimestamp(client.membershipDueDate),
-      };
-
       const { data, error } = await supabase
         .from('clients')
         .insert([clientData])
@@ -152,55 +212,81 @@ export const api = {
         chest: data.chest,
         waist: data.waist,
         bmi: data.bmi,
-        photoUrl: data.photo_url,
+        photoUrl:
+          await resolvePrivatePhotoUrl(
+            (data as any).photo_path,
+            data.photo_url
+          ),
+        photoPath:
+          (data as any).photo_path ?? null,
         membershipStatus: data.membership_status,
         registrationDate: data.registration_date,
         membershipDueDate: data.membership_due_date,
+        serverUpdatedAt: (data as any).updated_at ?? null,
+        syncVersion: (data as any).sync_version ?? null,
+        syncState: 'synced',
       };
 
-      // Update local cache
       const clients = await storage.getClients();
-      clients.push(newClient);
-      await storage.saveClients(clients);
+      const index = clients.findIndex(item => item.id === clientId);
 
+      if (index >= 0) {
+        clients[index] = newClient;
+      } else {
+        clients.push(newClient);
+      }
+
+      await storage.saveClients(clients);
       return newClient;
     } catch (error) {
       console.error('Error adding client:', error);
+
       if (!shouldFallbackToLocalStorage(isConnected, error)) {
         throw error;
       }
-      // Save locally if online fails
-      const clients = await storage.getClients();
+
       const newClient: Client = {
         ...client,
-        id: `local_${Date.now()}`,
+        id: clientId,
+        serverUpdatedAt: null,
+        syncVersion: 0,
+        syncState: 'pending',
       };
+
+      const clients = await storage.getClients();
       clients.push(newClient);
       await storage.saveClients(clients);
+
+      await offlineQueue.enqueueClientCreate(
+        clientId,
+        clientData
+      );
+
       return newClient;
     }
   },
 
   updateClient: async (id: string, client: Client, isConnected: boolean): Promise<Client> => {
-    try {
-      const activeGymId = await requireActiveGymId();
-      const clientData = {
-        name: client.name,
-        phone: client.phone,
-        email: client.email,
-        age: client.age,
-        gender: client.gender,
-        weight: client.weight,
-        height: client.height,
-        chest: client.chest,
-        waist: client.waist,
-        bmi: client.bmi,
-        photo_url: client.photoUrl,
-        membership_status: client.membershipStatus,
-        registration_date: client.registrationDate,
-        membership_due_date: toNullableTimestamp(client.membershipDueDate),
+    const activeGymId = await requireActiveGymId();
+
+    // Profile edits intentionally do not write membership/payment fields.
+    const clientData = {
+      name: client.name,
+      phone: client.phone,
+      email: client.email,
+      age: client.age,
+      gender: client.gender,
+      weight: client.weight,
+      height: client.height,
+      chest: client.chest,
+      waist: client.waist,
+      bmi: client.bmi,
+      photo_url: client.photoUrl,
+      photo_path:
+        client.photoPath ?? null,
       };
 
+    try {
       const { data, error } = await supabase
         .from('clients')
         .update(clientData)
@@ -223,16 +309,25 @@ export const api = {
         chest: data.chest,
         waist: data.waist,
         bmi: data.bmi,
-        photoUrl: data.photo_url,
+        photoUrl:
+          await resolvePrivatePhotoUrl(
+            (data as any).photo_path,
+            data.photo_url
+          ),
+        photoPath:
+          (data as any).photo_path ?? null,
         membershipStatus: data.membership_status,
         registrationDate: data.registration_date,
         membershipDueDate: data.membership_due_date,
+        serverUpdatedAt: (data as any).updated_at ?? null,
+        syncVersion: (data as any).sync_version ?? null,
+        syncState: 'synced',
       };
 
-      // Update local cache
       const clients = await storage.getClients();
-      const index = clients.findIndex(c => c.id === id);
-      if (index !== -1) {
+      const index = clients.findIndex(item => item.id === id);
+
+      if (index >= 0) {
         clients[index] = updatedClient;
         await storage.saveClients(clients);
       }
@@ -240,23 +335,40 @@ export const api = {
       return updatedClient;
     } catch (error) {
       console.error('Error updating client:', error);
+
       if (!shouldFallbackToLocalStorage(isConnected, error)) {
         throw error;
       }
-      // Update locally if online fails
+
+      const pendingClient: Client = {
+        ...client,
+        syncState: 'pending',
+      };
+
       const clients = await storage.getClients();
-      const index = clients.findIndex(c => c.id === id);
-      if (index !== -1) {
-        clients[index] = client;
+      const index = clients.findIndex(item => item.id === id);
+
+      if (index >= 0) {
+        clients[index] = pendingClient;
         await storage.saveClients(clients);
       }
-      return client;
+
+      await offlineQueue.enqueueClientUpdate(
+        id,
+        clientData,
+        client.syncVersion
+      );
+
+      return pendingClient;
     }
   },
 
   deleteClient: async (id: string): Promise<void> => {
+    const activeGymId = await requireActiveGymId();
+    const clients = await storage.getClients();
+    const target = clients.find(item => item.id === id);
+
     try {
-      const activeGymId = await requireActiveGymId();
       const { error } = await supabase
         .from('clients')
         .delete()
@@ -265,22 +377,26 @@ export const api = {
 
       if (error) throw error;
 
-      // Update local cache
-      const clients = await storage.getClients();
-      const filteredClients = clients.filter(client => client.id !== id);
-      await storage.saveClients(filteredClients);
+      await storage.saveClients(
+        clients.filter(item => item.id !== id)
+      );
     } catch (error) {
       console.error('Error deleting client:', error);
+
       if (!shouldFallbackToLocalStorage(undefined, error)) {
         throw error;
       }
-      // Delete locally if online fails
-      const clients = await storage.getClients();
-      const filteredClients = clients.filter(client => client.id !== id);
-      await storage.saveClients(filteredClients);
+
+      await storage.saveClients(
+        clients.filter(item => item.id !== id)
+      );
+
+      await offlineQueue.enqueueClientDelete(
+        id,
+        target?.syncVersion
+      );
     }
   },
-
   // Payment APIs
   getPayments: async (clientId?: string): Promise<Payment[]> => {
     try {
@@ -329,99 +445,11 @@ export const api = {
     }
   },
 
-  addPayment: async (payment: Omit<Payment, 'id'>, isConnected: boolean): Promise<Payment> => {
-    try {
-      const activeGymId = await requireActiveGymId();
-      const paymentData = {
-        gym_id: activeGymId,
-        client_id: payment.clientId,
-        client_name: payment.clientName,
-        amount: payment.amount,
-        payment_date: payment.paymentDate,
-        due_date: payment.dueDate,
-        status: payment.status,
-        duration: payment.duration,
-        payment_method: payment.paymentMethod,
-        reference_number: payment.referenceNumber ?? null,
-        provider_transaction_id: payment.providerTransactionId ?? null,
-        notes: payment.notes ?? null,
-      };
-
-      const { data, error } = await supabase
-        .from('payments')
-        .insert([paymentData])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newPayment: Payment = {
-        id: data.id,
-        clientId: data.client_id,
-        clientName: data.client_name,
-        amount: data.amount,
-        paymentDate: data.payment_date,
-        dueDate: data.due_date,
-        status: data.status,
-        duration: data.duration || 1,
-        paymentMethod: data.payment_method || 'cash',
-        referenceNumber: data.reference_number ?? null,
-        providerTransactionId: data.provider_transaction_id ?? null,
-        notes: data.notes ?? null,
-      };
-
-      // Update client membership status
-      await supabase
-        .from('clients')
-        .update({
-          membership_status: 'Paid',
-          membership_due_date: payment.dueDate,
-        })
-        .eq('id', payment.clientId)
-        .eq('gym_id', activeGymId);
-
-      // Update local cache
-      const payments = await storage.getPayments();
-      payments.push(newPayment);
-      await storage.savePayments(payments);
-
-      // Update local client data
-      const clients = await storage.getClients();
-      const clientIndex = clients.findIndex(c => c.id === payment.clientId);
-      if (clientIndex !== -1) {
-        clients[clientIndex].membershipStatus = 'Paid';
-        clients[clientIndex].membershipDueDate = payment.dueDate;
-        await storage.saveClients(clients);
-      }
-
-      return newPayment;
-    } catch (error) {
-      console.error('Error adding payment:', error);
-      if (!shouldFallbackToLocalStorage(isConnected, error)) {
-        throw error;
-      }
-      // Save locally if online fails
-      const payments = await storage.getPayments();
-      const newPayment: Payment = {
-        ...payment,
-        id: `local_${Date.now()}`,
-      };
-      payments.push(newPayment);
-      await storage.savePayments(payments);
-
-      // Update local client
-      const clients = await storage.getClients();
-      const clientIndex = clients.findIndex(c => c.id === payment.clientId);
-      if (clientIndex !== -1) {
-        clients[clientIndex].membershipStatus = 'Paid';
-        clients[clientIndex].membershipDueDate = payment.dueDate;
-        await storage.saveClients(clients);
-      }
-
-      return newPayment;
-    }
+  addPayment: async (_payment: Omit<Payment, 'id'>, _isConnected: boolean): Promise<Payment> => {
+    throw new Error(
+      'Legacy payment API is disabled. Record payments through the membership payment flow so the server can commit payment + membership atomically.'
+    );
   },
-
   // Dashboard APIs
   getDashboardStats: async (): Promise<DashboardStats> => {
     try {
@@ -455,7 +483,13 @@ export const api = {
   },
 
   // Image Upload
-  uploadImage: async (uri: string, fileName: string): Promise<string> => {
+  uploadImage: async (
+    uri: string,
+    fileName: string
+  ): Promise<{
+    url: string;
+    path: string | null;
+  }> => {
     try {
       // Read the file as base64 using expo-file-system legacy API
       const fileInfo = await FileSystemLegacy.getInfoAsync(uri);
@@ -476,10 +510,10 @@ export const api = {
 
       // Upload to Supabase Storage
       const activeGymId = await requireActiveGymId();
-      const storagePath = `gyms/${activeGymId}/client-photos/${fileName}`;
+      const storagePath = `${activeGymId}/client-photos/${fileName}`;
 
       const { data, error } = await supabase.storage
-        .from('client-photos')
+        .from('client-photos-private')
         .upload(storagePath, bytes, {
           contentType: 'image/jpeg',
           upsert: true,
@@ -487,19 +521,34 @@ export const api = {
 
       if (error) throw error;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('client-photos')
-        .getPublicUrl(storagePath);
+      const {
+        data: signed,
+        error: signedError,
+      } = await supabase.storage
+        .from('client-photos-private')
+        .createSignedUrl(
+          storagePath,
+          7 * 24 * 60 * 60
+        );
 
-      return publicUrl;
+      if (signedError) {
+        throw signedError;
+      }
+
+      return {
+        url: signed.signedUrl,
+        path: storagePath,
+      };
     } catch (error) {
       console.error('Error uploading image:', error);
       if (!shouldFallbackToLocalStorage(undefined, error)) {
         throw error;
       }
       // Return the local URI as fallback
-      return uri;
+      return {
+        url: uri,
+        path: null,
+      };
     }
   },
 
@@ -516,7 +565,11 @@ export const api = {
 
       if (error) throw error;
 
-      const clients: Client[] = data?.map(item => ({
+      const clients: Client[] =
+        await Promise.all(
+          (data || []).map(
+            async item => ({
+
         id: item.id,
         name: item.name,
         phone: item.phone,
@@ -528,11 +581,23 @@ export const api = {
         chest: item.chest,
         waist: item.waist,
         bmi: item.bmi,
-        photoUrl: item.photo_url,
+        photoUrl:
+          await resolvePrivatePhotoUrl(
+            (item as any).photo_path,
+            item.photo_url
+          ),
+        photoPath:
+          (item as any).photo_path ?? null,
         membershipStatus: item.membership_status,
         registrationDate: item.registration_date,
         membershipDueDate: item.membership_due_date,
-      })) || [];
+        serverUpdatedAt: (item as any).updated_at ?? null,
+        syncVersion: (item as any).sync_version ?? null,
+        syncState: 'synced',
+      
+            })
+          )
+        );
 
       return clients;
     } catch (error) {
@@ -582,12 +647,6 @@ export const api = {
 
   // Sync local data with server
   syncLocalData: async (): Promise<void> => {
-    try {
-      // This would sync any locally created data when coming back online
-      // Implementation depends on your specific needs
-      console.log('Syncing local data with server...');
-    } catch (error) {
-      console.error('Error syncing data:', error);
-    }
+    await offlineQueue.processQueue();
   },
 };

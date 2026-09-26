@@ -1,77 +1,157 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Client, Payment } from '../types';
+import type { Client, Payment } from '../types';
 
-const STORAGE_KEYS = {
-  CLIENTS: '@gym_app_clients',
-  PAYMENTS: '@gym_app_payments',
+type Scope = {
+  userId: string;
+  gymId: string;
+};
+
+let currentScope: Scope | null = null;
+
+const LEGACY_KEYS = [
+  '@gym_app_clients',
+  '@gym_app_payments',
+  'offline_queue',
+];
+
+const requireScope = (): Scope => {
+  if (!currentScope) {
+    throw new Error(
+      'Local storage scope is not ready. Sign in and select a gym first.'
+    );
+  }
+
+  return currentScope;
+};
+
+const key = (
+  kind: 'clients' | 'payments' | 'meta'
+) => {
+  const scope = requireScope();
+
+  return [
+    '@gym_app',
+    'v2',
+    scope.userId,
+    scope.gymId,
+    kind,
+  ].join(':');
 };
 
 export const storage = {
-  // Clients
-  saveClients: async (clients: Client[]): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
-    } catch (error) {
-      console.error('Error saving clients:', error);
-      throw new Error('Failed to save clients');
-    }
+  setScope: (
+    userId: string | null | undefined,
+    gymId: string | null | undefined
+  ) => {
+    currentScope =
+      userId && gymId
+        ? { userId, gymId }
+        : null;
   },
 
-  getClients: async (): Promise<Client[]> => {
+  getScope: () => currentScope,
+
+  clearLegacyUnscoped: async () => {
+    await AsyncStorage.multiRemove(
+      LEGACY_KEYS
+    );
+  },
+
+  saveClients: async (
+    clients: Client[]
+  ): Promise<void> => {
+    if (!currentScope) return;
+
+    await AsyncStorage.setItem(
+      key('clients'),
+      JSON.stringify(clients)
+    );
+  },
+
+  getClients: async (): Promise<
+    Client[]
+  > => {
+    if (!currentScope) return [];
+
     try {
-      const clientsJson = await AsyncStorage.getItem(STORAGE_KEYS.CLIENTS);
-      return clientsJson ? JSON.parse(clientsJson) : [];
+      const raw =
+        await AsyncStorage.getItem(
+          key('clients')
+        );
+
+      return raw
+        ? JSON.parse(raw)
+        : [];
     } catch (error) {
-      console.error('Error loading clients:', error);
+      console.error(
+        'Error loading scoped clients:',
+        error
+      );
+
       return [];
     }
   },
 
-  // Payments
-  savePayments: async (payments: Payment[]): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
-    } catch (error) {
-      console.error('Error saving payments:', error);
-      throw new Error('Failed to save payments');
-    }
+  savePayments: async (
+    payments: Payment[]
+  ): Promise<void> => {
+    if (!currentScope) return;
+
+    await AsyncStorage.setItem(
+      key('payments'),
+      JSON.stringify(payments)
+    );
   },
 
-  getPayments: async (): Promise<Payment[]> => {
+  getPayments: async (): Promise<
+    Payment[]
+  > => {
+    if (!currentScope) return [];
+
     try {
-      const paymentsJson = await AsyncStorage.getItem(STORAGE_KEYS.PAYMENTS);
-      return paymentsJson ? JSON.parse(paymentsJson) : [];
+      const raw =
+        await AsyncStorage.getItem(
+          key('payments')
+        );
+
+      return raw
+        ? JSON.parse(raw)
+        : [];
     } catch (error) {
-      console.error('Error loading payments:', error);
+      console.error(
+        'Error loading scoped payments:',
+        error
+      );
+
       return [];
     }
   },
 
-  // Clear all data (for debugging)
   clearAll: async (): Promise<void> => {
-    try {
-      await AsyncStorage.multiRemove([STORAGE_KEYS.CLIENTS, STORAGE_KEYS.PAYMENTS]);
-    } catch (error) {
-      console.error('Error clearing storage:', error);
-    }
+    if (!currentScope) return;
+
+    await AsyncStorage.multiRemove([
+      key('clients'),
+      key('payments'),
+      key('meta'),
+    ]);
   },
 
-  // Generic key-value storage
-  setItem: async (key: string, value: string): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(key, value);
-    } catch (error) {
-      console.error('Error saving item:', error);
-      throw new Error('Failed to save item');
-    }
+  setItem: async (
+    itemKey: string,
+    value: string
+  ): Promise<void> => {
+    await AsyncStorage.setItem(
+      itemKey,
+      value
+    );
   },
 
-  getItem: async (key: string): Promise<string | null> => {
-    try {
-      return await AsyncStorage.getItem(key);
-    } catch (error) {
-      console.error('Error getting item:', error);
-      return null;
-    }
+  getItem: async (
+    itemKey: string
+  ): Promise<string | null> => {
+    return AsyncStorage.getItem(
+      itemKey
+    );
   },
 };

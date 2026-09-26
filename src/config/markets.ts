@@ -37,7 +37,7 @@ export const MARKET_CONFIG: Record<CountryCode, MarketConfig> = {
     country: 'IN',
     countryName: 'India',
     currency: 'INR',
-    currencySymbol: 'â‚¹',
+    currencySymbol: 'INR',
     callingCode: '+91',
     timezone: 'Asia/Kolkata',
     locale: 'en-IN',

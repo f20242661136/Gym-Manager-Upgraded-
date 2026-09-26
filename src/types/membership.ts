@@ -1,0 +1,3 @@
+export interface MembershipPlan {id:string;name:string;durationDays:number;price:number;admissionFee:number;description?:string|null;isActive:boolean;createdAt?:string;updatedAt?:string}
+export type MembershipLifecycleStatus='active'|'scheduled'|'frozen'|'expired'|'cancelled';
+export interface MembershipRecord {id:string;clientId:string;planId?:string|null;planName?:string|null;startDate:string;endDate:string;status:MembershipLifecycleStatus;priceSnapshot:number;discountAmount:number;admissionFee:number;paymentId?:string|null;frozenAt?:string|null;freezeReason?:string|null;notes?:string|null;createdAt?:string}

@@ -1,3 +1,5 @@
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import { ui } from '../ui/theme';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -119,10 +121,10 @@ const AuditLogScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createAdaptiveStyles({
   page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
   content: {
     padding: 18,
@@ -132,14 +134,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
   hero: {
     padding: 18,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: ui.color.border,
     flexDirection: 'row',
     marginBottom: 16,
   },
@@ -147,7 +149,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 16,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: ui.color.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -156,29 +158,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eyebrow: {
-    color: '#6366F1',
+    color: ui.color.brand,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   title: {
-    color: '#0F172A',
+    color: ui.color.text,
     fontSize: 23,
     fontWeight: '900',
     marginTop: 2,
   },
   subtitle: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 5,
   },
   logRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: ui.color.border,
     borderRadius: 15,
     padding: 15,
     marginBottom: 9,
@@ -187,7 +189,7 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: '#6366F1',
+    backgroundColor: ui.color.brand,
     marginTop: 5,
     marginRight: 12,
   },
@@ -195,18 +197,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logTitle: {
-    color: '#0F172A',
+    color: ui.color.text,
     fontSize: 14,
     fontWeight: '800',
   },
   logMeta: {
-    color: '#475569',
+    color: ui.color.textSecondary,
     fontSize: 12,
     fontWeight: '600',
     marginTop: 5,
   },
   logTime: {
-    color: '#94A3B8',
+    color: ui.color.textMuted,
     fontSize: 11,
     marginTop: 3,
   },
@@ -215,13 +217,13 @@ const styles = StyleSheet.create({
     paddingVertical: 46,
   },
   emptyTitle: {
-    color: '#334155',
+    color: ui.color.textSecondary,
     fontSize: 16,
     fontWeight: '800',
     marginTop: 12,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: ui.color.textMuted,
     fontSize: 13,
     marginTop: 4,
   },

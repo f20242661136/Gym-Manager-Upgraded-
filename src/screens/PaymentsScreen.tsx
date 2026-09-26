@@ -1,388 +1,805 @@
-import React, { useState, useEffect } from 'react';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  TextInput,
   TouchableOpacity,
-  Alert,
+  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RouteProp } from '@react-navigation/native';
-import { PaymentStackParamList } from '../types/navigation';
-import { api } from '../services/api';
-import { Payment } from '../types/index';
+import {
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
+
 import { useGym } from '../contexts/GymContext';
+import { receiptService } from '../services/receiptService';
 import { formatMoney } from '../utils/currency';
+import type {
+  ReceiptPaymentListItem,
+} from '../types/receipt';
+import {
+  EmptyState,
+  StatusPill,
+} from '../ui/components';
+import { ui } from '../ui/theme';
 
-const PaymentsScreen: React.FC = () => {
-  const navigation = useNavigation<StackNavigationProp<PaymentStackParamList>>();
-  const route = useRoute<RouteProp<PaymentStackParamList, 'PaymentsList'>>();
-  const { clientId, clientName } = route.params || {};
-  const { activeGym } = useGym();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [filter, setFilter] = useState<'all' | 'due'>('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+type Filter =
+  | 'all'
+  | 'paid'
+  | 'voided';
 
-  const loadPayments = async () => {
-    try {
-      const paymentsData = await api.getPayments();
-      setPayments(paymentsData);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load payments');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
+const methodLabel = (
+  value: string
+) =>
+  value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, char =>
+      char.toUpperCase()
+    );
+
+const PaymentsScreen:
+  React.FC = () => {
+  const navigation =
+    useNavigation<any>();
+
+  const route = useRoute<any>();
+
+  const {
+    activeGym,
+    activeGymId,
+  } = useGym();
+
+  const routeClientId =
+    route.params?.clientId ||
+    null;
+
+  const routeClientName =
+    route.params?.clientName ||
+    null;
+
+  const [rows, setRows] =
+    useState<
+      ReceiptPaymentListItem[]
+    >([]);
+
+  const [query, setQuery] =
+    useState('');
+
+  const [filter, setFilter] =
+    useState<Filter>('all');
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const load =
+    useCallback(async () => {
+      if (!activeGymId) return;
+
+      try {
+        setError(null);
+
+        const result =
+          await receiptService.listPayments(
+            activeGymId,
+            routeClientId
+          );
+
+        setRows(result);
+      } catch (loadError: any) {
+        console.error(
+          'Payment history failed:',
+          loadError
+        );
+
+        setError(
+          loadError?.message ||
+          'Payment history could not be refreshed.'
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }, [
+      activeGymId,
+      routeClientId,
+    ]);
 
   useEffect(() => {
-    loadPayments();
-  }, []);
+    load();
+  }, [load]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadPayments();
-  };
+  const filtered =
+    useMemo(() => {
+      const q =
+        query
+          .trim()
+          .toLowerCase();
 
-  const getFilteredPayments = () => {
-    let filtered = payments;
+      return rows
+        .filter(item => {
+          if (filter === 'paid') {
+            return (
+              item.status === 'Paid'
+            );
+          }
 
-    // Filter by client if clientId is provided
-    if (clientId) {
-      filtered = filtered.filter(payment => payment.clientId === clientId);
-    }
+          if (
+            filter === 'voided'
+          ) {
+            return (
+              item.status ===
+              'Voided'
+            );
+          }
 
-    if (filter === 'due') {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      filtered = filtered.filter(payment => payment.dueDate <= todayStr);
-    }
+          return true;
+        })
+        .filter(item => {
+          if (!q) return true;
 
-    return filtered;
-  };
+          return [
+            item.clientName,
+            item.receiptNumber,
+            item.referenceNumber,
+            item.planName,
+            item.paymentMethod,
+          ]
+            .filter(Boolean)
+            .some(value =>
+              String(value)
+                .toLowerCase()
+                .includes(q)
+            );
+        });
+    }, [
+      filter,
+      query,
+      rows,
+    ]);
 
-  const PaymentCard: React.FC<{ payment: Payment }> = ({ payment }) => (
-    <View style={styles.paymentCard}>
-      <View style={styles.paymentHeader}>
-        <Text style={styles.clientName}>{payment.clientName}</Text>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: payment.status === 'Paid' ? '#10B981' : '#F59E0B' }
-        ]}>
-          <Text style={styles.statusText}>{payment.status}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.paymentBody}>
-        <View style={styles.amountContainer}>
-          <Text style={styles.amount}>
-            {formatMoney(payment.amount, activeGym?.currencyCode ?? 'PKR')}
-          </Text>
-          <Text style={styles.currency}>
-            {activeGym?.currencyCode ?? 'PKR'} Ã¢â‚¬Â¢ {payment.paymentMethod || 'cash'}
-          </Text>
-        </View>
-        
-        <View style={styles.datesContainer}>
-          <View style={styles.dateItem}>
-            <Text style={styles.dateLabel}>Paid</Text>
-            <Text style={styles.dateValue}>{payment.paymentDate}</Text>
-          </View>
-          
-          <View style={styles.dateItem}>
-            <Text style={styles.dateLabel}>Due</Text>
-            <Text style={[
-              styles.dateValue,
-              (() => {
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                return payment.dueDate <= todayStr && styles.overdueDate;
-              })()
-            ]}>
-              {payment.dueDate}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </View>
+  const paidTotal = useMemo(
+    () =>
+      rows
+        .filter(
+          item =>
+            item.status ===
+            'Paid'
+        )
+        .reduce(
+          (sum, item) =>
+            sum + item.amount,
+          0
+        ),
+    [rows]
   );
 
-  if (isLoading) {
+  const voidedCount =
+    rows.filter(
+      item =>
+        item.status === 'Voided'
+    ).length;
+
+  const rootNavigate = (
+    name: string,
+    params?: any
+  ) => {
+    navigation
+      .getParent()
+      ?.getParent()
+      ?.navigate(name, params);
+  };
+
+  if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <Text>Loading payments...</Text>
+      <View style={styles.loading}>
+        <ActivityIndicator
+          size="large"
+          color={ui.color.brand}
+        />
+        <Text
+          style={styles.loadingText}
+        >
+          Loading receipts...
+        </Text>
       </View>
     );
   }
 
+  const filters: {
+    key: Filter;
+    label: string;
+  }[] = [
+    {
+      key: 'all',
+      label: `All  -  ${rows.length}`,
+    },
+    {
+      key: 'paid',
+      label: `Paid  -  ${
+        rows.length -
+        voidedCount
+      }`,
+    },
+    {
+      key: 'voided',
+      label: `Voided  -  ${voidedCount}`,
+    },
+  ];
+
   return (
-    <View style={styles.container}>
-      {/* Custom Header for Client Payments */}
-      {clientId && (
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{clientName}'s Payments</Text>
-        </View>
-      )}
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === 'all' && styles.filterButtonTextActive
-          ]}>
-            All Payments
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'due' && styles.filterButtonActive]}
-          onPress={() => setFilter('due')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === 'due' && styles.filterButtonTextActive
-          ]}>
-            Due Payments
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Payments List */}
+    <View style={styles.page}>
       <FlatList
-        data={getFilteredPayments()}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PaymentCard payment={item} />}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        data={filtered}
+        keyExtractor={item =>
+          item.id
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="card-outline" size={64} color="#9CA3AF" />
-            <Text style={styles.emptyText}>
-              {filter === 'due' ? 'No due payments' : 'No payments recorded'}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {filter === 'due' 
-                ? 'All payments are up to date!' 
-                : 'Start recording payments to see them here'
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            tintColor={ui.color.brand}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={
+          styles.content
+        }
+        ListHeaderComponent={
+          <>
+            <View style={styles.hero}>
+              <Text style={styles.eyebrow}>
+                {routeClientName
+                  ? 'MEMBER RECEIPTS'
+                  : activeGym?.name ||
+                    'PAYMENTS'}
+              </Text>
+
+              <Text
+                style={styles.heroTitle}
+              >
+                {routeClientName ||
+                  'Payments'}
+              </Text>
+
+              <View
+                style={
+                  styles.totalRow
+                }
+              >
+                <View>
+                  <Text
+                    style={
+                      styles.totalLabel
+                    }
+                  >
+                    CONFIRMED COLLECTIONS
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.totalValue
+                    }
+                  >
+                    {formatMoney(
+                      paidTotal,
+                      activeGym
+                        ?.currencyCode ||
+                        'PKR'
+                    )}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={() =>
+                    rootNavigate(
+                      'WhatsAppTools'
+                    )
+                  }
+                  style={
+                    styles.whatsAppButton
+                  }
+                >
+                  <Ionicons
+                    name="logo-whatsapp"
+                    size={19}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {error ? (
+              <TouchableOpacity
+                onPress={load}
+                style={styles.errorBar}
+              >
+                <Ionicons
+                  name="cloud-offline-outline"
+                  size={18}
+                  color={
+                    ui.color.warning
+                  }
+                />
+                <Text
+                  style={
+                    styles.errorText
+                  }
+                >
+                  {error} Tap to retry.
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <View style={styles.search}>
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={
+                  ui.color.textMuted
+                }
+              />
+
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                style={
+                  styles.searchInput
+                }
+                placeholder="Search member, receipt, plan or reference"
+                placeholderTextColor={
+                  ui.color.textMuted
+                }
+                autoCorrect={false}
+              />
+
+              {query ? (
+                <TouchableOpacity
+                  onPress={() =>
+                    setQuery('')
+                  }
+                  style={
+                    styles.clearButton
+                  }
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={
+                      ui.color.textMuted
+                    }
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <View
+              style={
+                styles.filterRow
               }
+            >
+              {filters.map(item => {
+                const selected =
+                  item.key === filter;
+
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    onPress={() =>
+                      setFilter(item.key)
+                    }
+                    style={[
+                      styles.filterChip,
+                      selected &&
+                        styles.filterChipOn,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        selected &&
+                          styles.filterTextOn,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text
+              style={styles.sectionTitle}
+            >
+              RECEIPT HISTORY
             </Text>
+          </>
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            accessibilityRole="button"
+            activeOpacity={0.75}
+            onPress={() =>
+              rootNavigate(
+                'Receipt',
+                {
+                  paymentId:
+                    item.id,
+                }
+              )
+            }
+            style={styles.paymentCard}
+          >
+            <View
+              style={[
+                styles.paymentIcon,
+                item.status ===
+                  'Voided' &&
+                  styles.paymentIconVoided,
+              ]}
+            >
+              <Ionicons
+                name="receipt-outline"
+                size={20}
+                color={
+                  item.status ===
+                  'Voided'
+                    ? ui.color.textMuted
+                    : ui.color.brand
+                }
+              />
+            </View>
+
+            <View
+              style={
+                styles.paymentCopy
+              }
+            >
+              <View
+                style={
+                  styles.paymentTop
+                }
+              >
+                <Text
+                  style={
+                    styles.memberName
+                  }
+                  numberOfLines={1}
+                >
+                  {item.clientName}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.amount,
+                    item.status ===
+                      'Voided' &&
+                      styles.amountVoided,
+                  ]}
+                >
+                  {formatMoney(
+                    item.amount,
+                    activeGym
+                      ?.currencyCode ||
+                      'PKR'
+                  )}
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.receiptNumber
+                }
+              >
+                {item.receiptNumber}
+                {item.planName
+                  ? `  -  ${item.planName}`
+                  : ''}
+              </Text>
+
+              <View
+                style={
+                  styles.paymentBottom
+                }
+              >
+                <Text
+                  style={
+                    styles.paymentMeta
+                  }
+                >
+                  {new Date(
+                    item.paymentDate
+                  ).toLocaleDateString()}
+                  {' - '}
+                  {methodLabel(
+                    item.paymentMethod
+                  )}
+                </Text>
+
+                <StatusPill
+                  label={item.status}
+                  toneName={
+                    item.status ===
+                    'Paid'
+                      ? 'success'
+                      : item.status ===
+                          'Voided'
+                        ? 'danger'
+                        : 'warning'
+                  }
+                />
+              </View>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={19}
+              color={ui.color.textMuted}
+            />
+          </TouchableOpacity>
+        )}
+        ItemSeparatorComponent={() => (
+          <View style={styles.separator} />
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <EmptyState
+              icon="receipt-outline"
+              title="No receipts found"
+              body={
+                query
+                  ? 'Try another search.'
+                  : 'Confirmed membership payments will appear here.'
+              }
+            />
           </View>
         }
-        contentContainerStyle={styles.listContent}
       />
-
-      {/* Stats Summary */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{payments.length}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {formatMoney(
-              payments.reduce((sum, payment) => sum + payment.amount, 0),
-              activeGym?.currencyCode ?? 'PKR'
-            )}
-          </Text>
-          <Text style={styles.statLabel}>Revenue</Text>
-        </View>
-        
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {payments.filter(p => p.status === 'Paid').length}
-          </Text>
-          <Text style={styles.statLabel}>Paid</Text>
-        </View>
-      </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const styles = createAdaptiveStyles({
+  page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
-  header: {
-    flexDirection: 'row',
+  content: {
+    paddingBottom: 42,
+  },
+  loading: {
+    flex: 1,
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  centerContainer: {
-    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
-  filterContainer: {
+  loadingText: {
+    color: ui.color.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: ui.space.md,
+  },
+  hero: {
+    margin: ui.space.lg,
+    marginBottom: ui.space.md,
+    backgroundColor: ui.color.brandStrong,
+    borderRadius: ui.radius.xl,
+    padding: ui.space.xl,
+  },
+  eyebrow: {
+    color: '#C7D2FE',
+    fontSize: ui.type.eyebrow,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: ui.type.page,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  totalRow: {
+    marginTop: ui.space.lg,
     flexDirection: 'row',
-    padding: 16,
-    gap: 8,
-  },
-  filterButton: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: 'white',
-    borderRadius: 8,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    justifyContent: 'space-between',
   },
-  filterButtonActive: {
-    backgroundColor: '#6366F1',
+  totalLabel: {
+    color: '#C7D2FE',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.7,
   },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+  totalValue: {
+    color: '#FFFFFF',
+    fontSize: 23,
+    fontWeight: '900',
+    marginTop: 3,
   },
-  filterButtonTextActive: {
-    color: 'white',
+  whatsAppButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  listContent: {
-    paddingBottom: 100,
+  errorBar: {
+    marginHorizontal: ui.space.lg,
+    marginBottom: ui.space.md,
+    minHeight: ui.touch.min,
+    backgroundColor: ui.color.warningSoft,
+    borderWidth: 1,
+    borderColor: ui.color.warningBorder,
+    borderRadius: ui.radius.md,
+    paddingHorizontal: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.sm,
+  },
+  errorText: {
+    flex: 1,
+    color: ui.color.warning,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  search: {
+    minHeight: 52,
+    marginHorizontal: ui.space.lg,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.md,
+    paddingHorizontal: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: ui.color.text,
+    fontSize: 12,
+  },
+  clearButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterRow: {
+    paddingHorizontal: ui.space.lg,
+    paddingVertical: ui.space.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ui.space.sm,
+  },
+  filterChip: {
+    minHeight: 38,
+    borderRadius: ui.radius.pill,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
+    paddingHorizontal: 11,
+    justifyContent: 'center',
+  },
+  filterChipOn: {
+    backgroundColor: ui.color.brandSoft,
+    borderColor: ui.color.brandBorder,
+  },
+  filterText: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  filterTextOn: {
+    color: ui.color.brand,
+  },
+  sectionTitle: {
+    marginHorizontal: ui.space.lg,
+    marginTop: ui.space.xs,
+    marginBottom: ui.space.sm,
+    color: ui.color.textMuted,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   paymentCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  paymentHeader: {
+    minHeight: 86,
+    marginHorizontal: ui.space.lg,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.lg,
+    padding: ui.space.md,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  clientName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  separator: {
+    height: ui.space.sm,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  paymentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: ui.color.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.md,
   },
-  statusText: {
-    color: 'white',
+  paymentIconVoided: {
+    backgroundColor: ui.color.surfaceSubtle,
+  },
+  paymentCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  paymentTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: ui.space.sm,
+  },
+  memberName: {
+    flex: 1,
+    color: ui.color.text,
     fontSize: 12,
-    fontWeight: '600',
-  },
-  paymentBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  amountContainer: {
-    alignItems: 'center',
+    fontWeight: '900',
   },
   amount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    maxWidth: '46%',
+    flexShrink: 1,
+    color: ui.color.text,
+    fontSize: 13,
+    fontWeight: '900',
   },
-  currency: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+  amountVoided: {
+    color: ui.color.textMuted,
+    textDecorationLine: 'line-through',
   },
-  datesContainer: {
-    gap: 8,
+  receiptNumber: {
+    color: ui.color.brand,
+    fontSize: 9,
+    fontWeight: '800',
+    marginTop: 3,
   },
-  dateItem: {
-    alignItems: 'flex-end',
-  },
-  dateLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  dateValue: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  overdueDate: {
-    color: '#EF4444',
-    fontWeight: 'bold',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 48,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  statsContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  paymentBottom: {
+    marginTop: 7,
     flexDirection: 'row',
-    backgroundColor: 'white',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  statItem: {
-    flex: 1,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: ui.space.sm,
   },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  paymentMeta: {
+    flex: 1,
+    color: ui.color.textSecondary,
+    fontSize: 8,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
+  empty: {
+    marginHorizontal: ui.space.lg,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.lg,
   },
 });
 

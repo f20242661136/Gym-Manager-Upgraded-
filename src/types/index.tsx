@@ -25,9 +25,13 @@ export interface Client {
   waist: number;
   bmi: number;
   photoUrl: string;
-  membershipStatus: 'Paid' | 'Unpaid';
+    photoPath?: string | null;
+membershipStatus: 'Paid' | 'Unpaid';
   registrationDate: string;
   membershipDueDate?: string;
+  serverUpdatedAt?: string | null;
+  syncVersion?: number | null;
+  syncState?: 'synced' | 'pending' | 'failed';
 }
 
 export interface Payment {

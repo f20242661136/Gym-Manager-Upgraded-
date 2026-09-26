@@ -1,272 +1,649 @@
-import React, { useState, useEffect } from 'react';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
+  ActivityIndicator,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { RootTabParamList } from '../types/navigation';
+
 import { api } from '../services/api';
-import { DashboardStats, Client, Payment } from '../types';
+import { useGym } from '../contexts/GymContext';
+import type {
+  DashboardStats,
+  Client,
+  Payment,
+} from '../types';
+import {
+  EmptyState,
+  MetricCard,
+  QuickAction,
+  SectionHeader,
+  StatusPill,
+  SurfaceCard,
+} from '../ui/components';
+import { ui } from '../ui/theme';
 
 const DashboardScreen: React.FC = () => {
-  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalClients: 0,
-    paidClients: 0,
-    unpaidClients: 0,
-  });
-  const [recentClients, setRecentClients] = useState<Client[]>([]);
-  const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation<any>();
+  const { activeGym } = useGym();
+  const { width, fontScale } = useWindowDimensions();
+  const compactMetrics = width < 390 || fontScale >= 1.25;
 
-  const loadDashboardData = async () => {
+  const [stats, setStats] =
+    useState<DashboardStats>({
+      totalClients: 0,
+      paidClients: 0,
+      unpaidClients: 0,
+    });
+
+  const [recentClients, setRecentClients] =
+    useState<Client[]>([]);
+
+  const [recentPayments, setRecentPayments] =
+    useState<Payment[]>([]);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const load = useCallback(async () => {
     try {
-      const [dashboardStats, clients, payments] = await Promise.all([
+      setError(null);
+
+      const [
+        dashboardStats,
+        clients,
+        payments,
+      ] = await Promise.all([
         api.getDashboardStats(),
         api.getRecentClients(),
         api.getRecentPayments(),
       ]);
+
       setStats(dashboardStats);
       setRecentClients(clients);
       setRecentPayments(payments);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load dashboard data');
+    } catch (loadError) {
+      console.error(
+        'Dashboard load failed:',
+        loadError
+      );
+
+      setError(
+        'Some dashboard data could not be refreshed.'
+      );
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadDashboardData();
   }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadDashboardData();
-  };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const completion = useMemo(() => {
+    if (stats.totalClients <= 0) {
+      return 0;
+    }
+
+    return Math.round(
+      (stats.paidClients /
+        stats.totalClients) *
+        100
+    );
+  }, [
+    stats.paidClients,
+    stats.totalClients,
+  ]);
 
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <Text>Loading dashboard...</Text>
+      <View style={styles.loading}>
+        <ActivityIndicator
+          size="large"
+          color={ui.color.brand}
+        />
+        <Text style={styles.loadingText}>
+          Preparing today's overview...
+        </Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
+      style={styles.page}
+      contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            load();
+          }}
+          tintColor={ui.color.brand}
+        />
       }
     >
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.eyebrow}>
+              {activeGym?.name || 'YOUR GYM'}
+            </Text>
 
-      {/* Stats Cards */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#6366F1' }]}>
-            <Ionicons name="people" size={24} color="white" />
+            <Text style={styles.heroTitle}>
+              Today at a glance
+            </Text>
+
+            <Text style={styles.heroSubtitle}>
+              Members, collections and front-desk actions without digging through reports.
+            </Text>
           </View>
-          <Text style={styles.statNumber}>{stats.totalClients}</Text>
-          <Text style={styles.statLabel}>Total Clients</Text>
+
+          <View style={styles.heroMark}>
+            <Ionicons
+              name="pulse-outline"
+              size={24}
+              color="#FFFFFF"
+            />
+          </View>
         </View>
 
-        <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#10B981' }]}>
-            <Ionicons name="checkmark-circle" size={24} color="white" />
+        <View style={styles.healthRow}>
+          <View style={styles.healthMain}>
+            <Text style={styles.healthValue}>
+              {completion}%
+            </Text>
+            <Text style={styles.healthLabel}>
+              members up to date
+            </Text>
           </View>
-          <Text style={styles.statNumber}>{stats.paidClients}</Text>
-          <Text style={styles.statLabel}>Paid Clients</Text>
-        </View>
 
-        <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#EF4444' }]}>
-            <Ionicons name="alert-circle" size={24} color="white" />
-          </View>
-          <Text style={styles.statNumber}>{stats.unpaidClients}</Text>
-          <Text style={styles.statLabel}>Unpaid Clients</Text>
+          <StatusPill
+            label={
+              stats.unpaidClients > 0
+                ? `${stats.unpaidClients} NEED ATTENTION`
+                : 'ALL CLEAR'
+            }
+            toneName={
+              stats.unpaidClients > 0
+                ? 'warning'
+                : 'success'
+            }
+          />
         </View>
       </View>
 
-      {/* Quick Actions */}
+      {error ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={load}
+          style={styles.errorBar}
+        >
+          <Ionicons
+            name="cloud-offline-outline"
+            size={18}
+            color={ui.color.warning}
+          />
+          <Text style={styles.errorText}>
+            {error} Tap to retry.
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <View
+        style={[
+          styles.metricGrid,
+          compactMetrics && styles.metricGridCompact,
+        ]}
+      >
+        <MetricCard
+          icon="people-outline"
+          label="Members"
+          value={stats.totalClients}
+          helper="Total profiles"
+          toneName="brand"
+        />
+
+        <MetricCard
+          icon="checkmark-circle-outline"
+          label="Up to date"
+          value={stats.paidClients}
+          helper="Membership paid"
+          toneName="success"
+        />
+
+        <MetricCard
+          icon="alert-circle-outline"
+          label="Attention"
+          value={stats.unpaidClients}
+          helper="Follow up"
+          toneName={
+            stats.unpaidClients > 0
+              ? 'warning'
+              : 'neutral'
+          }
+        />
+      </View>
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <View style={styles.actionsContainer}>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Clients', { screen: 'AddClient', params: {} })}>
-            <Ionicons name="person-add" size={32} color="#6366F1" />
-            <Text style={styles.actionText}>Add Client</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Payments', { screen: 'PaymentsList', params: {} })}>
-            <Ionicons name="card" size={32} color="#10B981" />
-            <Text style={styles.actionText}>Record Payment</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Notifications')}>
-            <Ionicons name="notifications" size={32} color="#F59E0B" />
-            <Text style={styles.actionText}>Reminders</Text>
-          </TouchableOpacity>
+        <SectionHeader
+          title="Quick actions"
+          subtitle="The front-desk tasks that should never take more than a couple of taps."
+        />
+
+        <View style={styles.quickActionGrid}>
+          <QuickAction
+            icon="person-add-outline"
+            label="Add member"
+            helper="Create a profile"
+            toneName="brand"
+            onPress={() =>
+              navigation.navigate(
+                'Clients',
+                { screen: 'AddClient' }
+              )
+            }
+          />
+
+          <QuickAction
+            icon="scan-circle-outline"
+            label="Check in"
+            helper="Manual or QR"
+            toneName="success"
+            onPress={() =>
+              navigation.navigate(
+                'Attendance'
+              )
+            }
+          />
+
+          <QuickAction
+            icon="cash-outline"
+            label="Receive fee"
+            helper="Membership payment"
+            toneName="warning"
+            onPress={() =>
+              navigation.navigate(
+                'Clients',
+                { screen: 'ClientsList' }
+              )
+            }
+          />
+
+          <QuickAction
+            icon="logo-whatsapp"
+            label="Message member"
+            helper="Reminder or welcome"
+            toneName="success"
+            onPress={() =>
+              navigation
+                .getParent()
+                ?.navigate('WhatsAppTools')
+            }
+          />
         </View>
       </View>
 
-      {/* Recent Activity */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        {recentClients.map(client => (
-          <TouchableOpacity
-            key={client.id}
-            style={styles.activityItem}
-            onPress={() => navigation.navigate('Clients', { screen: 'ClientDetail', params: { clientId: client.id } })}
-          >
-            <View style={styles.activityIcon}>
-              <Ionicons name="person-add" size={20} color="#10B981" />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>New client registered: {client.name}</Text>
-              <Text style={styles.activityTime}>{new Date(client.registrationDate).toLocaleDateString()}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-        {recentPayments.map(payment => (
-          <TouchableOpacity
-            key={payment.id}
-            style={styles.activityItem}
-            onPress={() => navigation.navigate('Payments', { screen: 'PaymentsList', params: { clientId: payment.clientId, clientName: payment.clientName } })}
-          >
-            <View style={styles.activityIcon}>
-              <Ionicons name="card" size={20} color="#6366F1" />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Payment received from {payment.clientName}</Text>
-              <Text style={styles.activityTime}>{new Date(payment.paymentDate).toLocaleDateString()}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        <SectionHeader
+          title="New members"
+          subtitle="Recent registrations"
+          actionLabel="View all"
+          onAction={() =>
+            navigation.navigate('Clients')
+          }
+        />
+
+        <SurfaceCard>
+          {recentClients.length === 0 ? (
+            <EmptyState
+              icon="people-outline"
+              title="No recent members"
+              body="New registrations will appear here."
+            />
+          ) : (
+            recentClients
+              .slice(0, 4)
+              .map((client, index) => (
+                <TouchableOpacity
+                  key={client.id}
+                  accessibilityRole="button"
+                  activeOpacity={0.75}
+                  style={[
+                    styles.activityRow,
+                    index > 0 &&
+                      styles.activityBorder,
+                  ]}
+                  onPress={() =>
+                    navigation.navigate(
+                      'Clients',
+                      {
+                        screen: 'ClientDetail',
+                        params: {
+                          clientId: client.id,
+                        },
+                      }
+                    )
+                  }
+                >
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {client.name
+                        .slice(0, 1)
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.activityCopy}>
+                    <Text
+                      style={styles.activityTitle}
+                      numberOfLines={1}
+                    >
+                      {client.name}
+                    </Text>
+
+                    <Text style={styles.activityMeta}>
+                      Joined{' '}
+                      {new Date(
+                        client.registrationDate
+                      ).toLocaleDateString()}
+                    </Text>
+                  </View>
+
+                  <StatusPill
+                    label={
+                      client.membershipStatus ===
+                      'Paid'
+                        ? 'PAID'
+                        : 'FOLLOW UP'
+                    }
+                    toneName={
+                      client.membershipStatus ===
+                      'Paid'
+                        ? 'success'
+                        : 'warning'
+                    }
+                  />
+                </TouchableOpacity>
+              ))
+          )}
+        </SurfaceCard>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader
+          title="Recent payments"
+          subtitle="Latest collection activity"
+          actionLabel="View all"
+          onAction={() =>
+            navigation.navigate('Payments')
+          }
+        />
+
+        <SurfaceCard>
+          {recentPayments.length === 0 ? (
+            <EmptyState
+              icon="receipt-outline"
+              title="No recent payments"
+              body="Confirmed member payments will appear here."
+            />
+          ) : (
+            recentPayments
+              .slice(0, 4)
+              .map((payment, index) => (
+                <TouchableOpacity
+                  key={payment.id}
+                  accessibilityRole="button"
+                  activeOpacity={0.75}
+                  style={[
+                    styles.activityRow,
+                    index > 0 &&
+                      styles.activityBorder,
+                  ]}
+                  onPress={() =>
+                    navigation.navigate(
+                      'Payments',
+                      {
+                        screen: 'PaymentsList',
+                        params: {
+                          clientId:
+                            payment.clientId,
+                          clientName:
+                            payment.clientName,
+                        },
+                      }
+                    )
+                  }
+                >
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      styles.paymentIcon,
+                    ]}
+                  >
+                    <Ionicons
+                      name="receipt-outline"
+                      size={18}
+                      color={ui.color.brand}
+                    />
+                  </View>
+
+                  <View style={styles.activityCopy}>
+                    <Text
+                      style={styles.activityTitle}
+                      numberOfLines={1}
+                    >
+                      {payment.clientName}
+                    </Text>
+
+                    <Text style={styles.activityMeta}>
+                      {new Date(
+                        payment.paymentDate
+                      ).toLocaleDateString()}
+                    </Text>
+                  </View>
+
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={ui.color.textMuted}
+                  />
+                </TouchableOpacity>
+              ))
+          )}
+        </SurfaceCard>
       </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const styles = createAdaptiveStyles({
+  page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
-  centerContainer: {
+  content: {
+    padding: ui.space.lg,
+    paddingBottom: 42,
+  },
+  loading: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
-  header: {
-    padding: 24,
-    paddingTop: 16,
+  loadingText: {
+    color: ui.color.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: ui.space.md,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  hero: {
+    backgroundColor: ui.color.brandStrong,
+    borderRadius: ui.radius.xl,
+    padding: ui.space.xl,
+    marginBottom: ui.space.md,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  statsContainer: {
+  heroTop: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    alignItems: 'flex-start',
   },
-  statCard: {
+  heroCopy: {
     flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 4,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingRight: ui.space.md,
   },
-  statIcon: {
+  eyebrow: {
+    color: '#C7D2FE',
+    fontSize: ui.type.eyebrow,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: ui.type.page,
+    fontWeight: '900',
+    marginTop: ui.space.xxs,
+  },
+  heroSubtitle: {
+    color: '#E0E7FF',
+    fontSize: ui.type.bodySm,
+    lineHeight: 17,
+    marginTop: ui.space.xs,
+    maxWidth: 270,
+  },
+  heroMark: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 15,
+    backgroundColor:
+      'rgba(255,255,255,0.12)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  section: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  actionsContainer: {
+  healthRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: ui.space.xl,
   },
-  actionItem: {
-    alignItems: 'center',
-    padding: 16,
-  },
-  actionText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  activityItem: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    alignItems: 'center',
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  activityContent: {
+  healthMain: {
     flex: 1,
   },
-  activityTitle: {
-    fontSize: 16,
-    color: '#1F2937',
-    marginBottom: 4,
+  healthValue: {
+    color: '#FFFFFF',
+    fontSize: 27,
+    fontWeight: '900',
   },
-  activityTime: {
+  healthLabel: {
+    color: '#C7D2FE',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  errorBar: {
+    minHeight: ui.touch.min,
+    backgroundColor: ui.color.warningSoft,
+    borderWidth: 1,
+    borderColor: ui.color.warningBorder,
+    borderRadius: ui.radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.sm,
+    paddingHorizontal: ui.space.md,
+    marginBottom: ui.space.md,
+  },
+  errorText: {
+    flex: 1,
+    color: ui.color.warning,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    gap: ui.space.sm,
+    marginBottom: ui.space.xl,
+  },
+
+  metricGridCompact: {
+    flexDirection: 'column',
+  },
+  section: {
+    marginBottom: ui.space.xl,
+  },
+  quickActionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ui.space.sm,
+  },
+  activityRow: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: ui.space.md,
+    paddingVertical: ui.space.sm,
+  },
+  activityBorder: {
+    borderTopWidth: 1,
+    borderTopColor: ui.color.divider,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: ui.color.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.md,
+  },
+  avatarText: {
+    color: ui.color.brand,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  activityIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.md,
+  },
+  paymentIcon: {
+    backgroundColor: ui.color.brandSoft,
+  },
+  activityCopy: {
+    flex: 1,
+    paddingRight: ui.space.sm,
+  },
+  activityTitle: {
+    color: ui.color.text,
     fontSize: 12,
-    color: '#6B7280',
+    fontWeight: '900',
+  },
+  activityMeta: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    marginTop: 3,
   },
 });
 

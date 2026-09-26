@@ -8,7 +8,7 @@ export type ClientStackParamList = {
 
 export type PaymentStackParamList = {
   PaymentsList: { clientId?: string; clientName?: string };
-  AddPayment: { clientId: string; clientName: string };
+  AddPayment: { clientId?: string; clientName?: string } | undefined;
 };
 
 export type RootTabParamList = {

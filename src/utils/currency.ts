@@ -2,7 +2,7 @@ import type { CurrencyCode } from '../types';
 
 const currencyConfig: Record<CurrencyCode, { locale: string; symbol: string }> = {
   PKR: { locale: 'en-PK', symbol: 'Rs.' },
-  INR: { locale: 'en-IN', symbol: 'â‚¹' },
+  INR: { locale: 'en-IN', symbol: 'INR' },
 };
 
 export function formatMoney(amount: number, currency: CurrencyCode = 'PKR'): string {

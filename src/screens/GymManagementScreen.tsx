@@ -1,4 +1,7 @@
-import React from 'react';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import React, {
+  useState,
+} from 'react';
 import {
   View,
   Text,
@@ -6,376 +9,1002 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+
 import { useGym } from '../contexts/GymContext';
-import { useGymPermissions } from '../hook/useGymPermissions';
-import { roleLabel } from '../config/permissions';
+import {
+  SectionHeader,
+  StatusPill,
+  SurfaceCard,
+} from '../ui/components';
+import { ui } from '../ui/theme';
 
-const GymManagementScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const { gyms, activeGym, setActiveGym, refreshGyms } = useGym();
-  const { role, permissions } = useGymPermissions();
+type ToolTone =
+  | 'brand'
+  | 'success'
+  | 'warning'
+  | 'neutral';
 
-  const handleSwitchGym = async (gymId: string) => {
+type OwnerTool = {
+  route: string;
+  icon:
+    keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  tone: ToolTone;
+};
+
+const colorsFor = (
+  tone: ToolTone
+) => {
+  if (tone === 'success') {
+    return {
+      background:
+        ui.color.successSoft,
+      foreground:
+        ui.color.success,
+    };
+  }
+
+  if (tone === 'warning') {
+    return {
+      background:
+        ui.color.warningSoft,
+      foreground:
+        ui.color.warning,
+    };
+  }
+
+  if (tone === 'neutral') {
+    return {
+      background:
+        ui.color.surfaceSubtle,
+      foreground:
+        ui.color.textSecondary,
+    };
+  }
+
+  return {
+    background:
+      ui.color.brandSoft,
+    foreground:
+      ui.color.brand,
+  };
+};
+
+const moneyTools: OwnerTool[] = [
+  {
+    route: 'FinanceDashboard',
+    icon: 'analytics-outline',
+    title: 'Finance overview',
+    subtitle:
+      'Revenue, expenses, net and renewal follow-up.',
+    tone: 'brand',
+  },
+  {
+    route: 'Expenses',
+    icon: 'wallet-outline',
+    title: 'Expenses',
+    subtitle:
+      'Record and review operating costs.',
+    tone: 'warning',
+  },
+];
+
+const membershipTools: OwnerTool[] = [
+  {
+    route: 'MembershipPlans',
+    icon: 'pricetags-outline',
+    title: 'Membership plans',
+    subtitle:
+      'Pricing, duration and admission fees.',
+    tone: 'success',
+  },
+];
+
+const teamTools: OwnerTool[] = [
+  {
+    route: 'StaffManagement',
+    icon: 'people-outline',
+    title: 'Staff & roles',
+    subtitle:
+      'Invitations, access roles and team status.',
+    tone: 'brand',
+  },
+  {
+    route: 'AuditLog',
+    icon: 'document-text-outline',
+    title: 'Activity log',
+    subtitle:
+      'Review important administrative actions.',
+    tone: 'neutral',
+  },
+];
+
+const GymManagementScreen:
+  React.FC = () => {
+  const navigation =
+    useNavigation<any>();
+
+  const {
+    gyms,
+    activeGym,
+    setActiveGym,
+    refreshGyms,
+  } = useGym();
+
+  const [
+    switchingGymId,
+    setSwitchingGymId,
+  ] =
+    useState<string | null>(null);
+
+  const openTool = (
+    route: string
+  ) => {
+    navigation.navigate(route);
+  };
+
+  const switchGym = async (
+    gymId: string
+  ) => {
+    if (
+      gymId === activeGym?.id
+    ) {
+      return;
+    }
+
     try {
+      setSwitchingGymId(gymId);
+
       await setActiveGym(gymId);
       await refreshGyms();
-      Alert.alert('Gym switched', 'Your active workspace has been updated.');
-    } catch (error) {
-      console.error('Failed to switch gym:', error);
-      Alert.alert('Error', 'Unable to switch gym right now.');
+
+      Alert.alert(
+        'Workspace switched',
+        'The selected gym is now active.'
+      );
+    } catch (error: any) {
+      console.error(
+        'Gym switch failed:',
+        error
+      );
+
+      Alert.alert(
+        'Unable to switch gym',
+        error?.message ||
+          'Please try again.'
+      );
+    } finally {
+      setSwitchingGymId(null);
     }
   };
+
+  const countryLabel =
+    activeGym?.countryCode === 'IN'
+      ? 'India'
+      : activeGym?.countryCode === 'PK'
+        ? 'Pakistan'
+        : activeGym?.countryCode ||
+          'Market not set';
 
   return (
     <ScrollView
       style={styles.page}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={
+        styles.content
+      }
     >
       <View style={styles.hero}>
         <View style={styles.heroTop}>
-          <View style={styles.gymMark}>
-            <Ionicons name="barbell-outline" size={26} color="#FFFFFF" />
+          <View
+            style={styles.heroIcon}
+          >
+            <Ionicons
+              name="grid-outline"
+              size={24}
+              color="#FFFFFF"
+            />
           </View>
 
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>ACTIVE WORKSPACE</Text>
-            <Text style={styles.gymName}>
-              {activeGym?.name || 'No gym selected'}
+          <StatusPill
+            label="OWNER WORKSPACE"
+            toneName="brand"
+          />
+        </View>
+
+        <Text
+          style={styles.eyebrow}
+        >
+          {activeGym?.name ||
+            'ACTIVE GYM'}
+        </Text>
+
+        <Text
+          style={styles.heroTitle}
+        >
+          Run the business
+        </Text>
+
+        <Text
+          style={
+            styles.heroSubtitle
+          }
+        >
+          Finance, memberships, staff
+          and workspace controls in one
+          place. Daily front-desk work
+          stays in the main tabs.
+        </Text>
+      </View>
+
+      <SurfaceCard
+        style={styles.gymCard}
+      >
+        <View
+          style={styles.gymCardTop}
+        >
+          <View style={styles.flex}>
+            <Text
+              style={
+                styles.sectionEyebrow
+              }
+            >
+              ACTIVE WORKSPACE
             </Text>
-            <Text style={styles.gymMeta}>
-              {activeGym?.countryCode === 'IN' ? 'India' : 'Pakistan'}
-              {'  |  '}
-              {activeGym?.currencyCode || 'PKR'}
+
+            <Text
+              style={styles.gymName}
+            >
+              {activeGym?.name ||
+                'No gym selected'}
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.activeBadge
+            }
+          >
+            <View
+              style={
+                styles.activeDot
+              }
+            />
+            <Text
+              style={
+                styles.activeText
+              }
+            >
+              Active
             </Text>
           </View>
         </View>
 
-        <View style={styles.accessPill}>
-          <Ionicons name="shield-checkmark-outline" size={15} color="#C7D2FE" />
-          <Text style={styles.accessText}>
-            {role ? roleLabel(role) : 'Loading access'}
-          </Text>
+        <View style={styles.metaGrid}>
+          <Meta
+            icon="location-outline"
+            label="Market"
+            value={countryLabel}
+          />
+
+          <Meta
+            icon="cash-outline"
+            label="Currency"
+            value={
+              activeGym?.currencyCode ||
+              '-'
+            }
+          />
+
+          <Meta
+            icon="time-outline"
+            label="Timezone"
+            value={
+              activeGym?.timezone ||
+              '-'
+            }
+          />
+
+          <Meta
+            icon="key-outline"
+            label="Join code"
+            value={
+              activeGym?.joinCode ||
+              '-'
+            }
+          />
+        </View>
+      </SurfaceCard>
+
+      <View style={styles.section}>
+        <SectionHeader
+          title="Money"
+          subtitle="Owner-level financial controls."
+        />
+
+        <View style={styles.toolGrid}>
+          {moneyTools.map(tool => (
+            <ToolCard
+              key={tool.route}
+              tool={tool}
+              onPress={() =>
+                openTool(tool.route)
+              }
+            />
+          ))}
         </View>
       </View>
 
-      <Text style={styles.sectionLabel}>MANAGE</Text>
+      <View style={styles.section}>
+        <SectionHeader
+          title="Memberships"
+          subtitle="What the gym sells and how memberships are structured."
+        />
 
-      <TouchableOpacity
-        style={styles.actionCard}
-        onPress={() => navigation.navigate('StaffManagement')}
-      >
-        <View style={[styles.actionIcon, styles.actionIconIndigo]}>
-          <Ionicons name="people-outline" size={23} color="#4F46E5" />
+        <View style={styles.toolGrid}>
+          {membershipTools.map(
+            tool => (
+              <ToolCard
+                key={tool.route}
+                tool={tool}
+                wide
+                onPress={() =>
+                  openTool(
+                    tool.route
+                  )
+                }
+              />
+            )
+          )}
         </View>
+      </View>
 
-        <View style={styles.actionCopy}>
-          <Text style={styles.actionTitle}>Staff & roles</Text>
-          <Text style={styles.actionSubtitle}>
-            View your team, permissions and staff access.
-          </Text>
+      <View style={styles.section}>
+        <SectionHeader
+          title="Team & security"
+          subtitle="Who can access the gym workspace and what changed."
+        />
+
+        <View style={styles.toolGrid}>
+          {teamTools.map(tool => (
+            <ToolCard
+              key={tool.route}
+              tool={tool}
+              onPress={() =>
+                openTool(tool.route)
+              }
+            />
+          ))}
         </View>
+      </View>
 
-        <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
-      </TouchableOpacity>
+      <View style={styles.section}>
+        <SectionHeader
+          title="Workspaces"
+          subtitle="Switch between gyms without mixing their active workspace."
+          actionLabel="Join gym"
+          onAction={() =>
+            navigation.navigate(
+              'JoinGym'
+            )
+          }
+        />
 
-      {permissions.canViewAudit ? (
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('AuditLog')}
-        >
-          <View style={[styles.actionIcon, styles.actionIconGreen]}>
-            <Ionicons name="time-outline" size={23} color="#047857" />
-          </View>
+        <SurfaceCard>
+          {gyms.map(
+            (gym, index) => {
+              const selected =
+                gym.id ===
+                activeGym?.id;
 
-          <View style={styles.actionCopy}>
-            <Text style={styles.actionTitle}>Activity log</Text>
-            <Text style={styles.actionSubtitle}>
-              Review important staff and financial actions.
-            </Text>
-          </View>
+              const busy =
+                switchingGymId ===
+                gym.id;
 
-          <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
-        </TouchableOpacity>
-      ) : null}
-
-      <TouchableOpacity
-        style={styles.actionCard}
-        onPress={() => navigation.navigate('JoinGym')}
-      >
-        <View style={[styles.actionIcon, styles.actionIconAmber]}>
-          <Ionicons name="person-add-outline" size={23} color="#B45309" />
-        </View>
-
-        <View style={styles.actionCopy}>
-          <Text style={styles.actionTitle}>Join another gym</Text>
-          <Text style={styles.actionSubtitle}>
-            Accept a temporary invitation from another workspace.
-          </Text>
-        </View>
-
-        <Ionicons name="chevron-forward" size={21} color="#94A3B8" />
-      </TouchableOpacity>
-
-      <Text style={styles.sectionLabel}>YOUR WORKSPACES</Text>
-
-      <View style={styles.card}>
-        {gyms.length === 0 ? (
-          <Text style={styles.emptyState}>No gyms joined yet.</Text>
-        ) : (
-          gyms.map((gym, index) => {
-            const isActive = gym.id === activeGym?.id;
-
-            return (
-              <TouchableOpacity
-                key={gym.id}
-                style={[
-                  styles.gymRow,
-                  index > 0 && styles.gymRowBorder,
-                ]}
-                onPress={() => handleSwitchGym(gym.id)}
-              >
-                <View style={styles.gymRowIcon}>
-                  <Ionicons
-                    name="business-outline"
-                    size={20}
-                    color={isActive ? '#4F46E5' : '#64748B'}
-                  />
-                </View>
-
-                <View style={styles.gymRowInfo}>
-                  <Text style={styles.gymRowName}>{gym.name}</Text>
-                  <Text style={styles.gymRowSlug}>
-                    {gym.countryCode} Â· {gym.currencyCode}
-                  </Text>
-                </View>
-
-                <View
+              return (
+                <TouchableOpacity
+                  key={gym.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    selected
+                      ? `${gym.name}, active workspace`
+                      : `Switch to ${gym.name}`
+                  }
+                  disabled={
+                    selected ||
+                    switchingGymId !==
+                      null
+                  }
+                  activeOpacity={0.76}
+                  onPress={() =>
+                    switchGym(gym.id)
+                  }
                   style={[
-                    styles.statusBadge,
-                    isActive && styles.statusBadgeActive,
+                    styles.gymRow,
+                    index > 0 &&
+                      styles.rowBorder,
                   ]}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.statusText,
-                      isActive && styles.statusTextActive,
+                      styles.gymIcon,
+                      selected &&
+                        styles.gymIconActive,
                     ]}
                   >
-                    {isActive ? 'Active' : 'Switch'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
+                    <Ionicons
+                      name="business-outline"
+                      size={19}
+                      color={
+                        selected
+                          ? ui.color.brand
+                          : ui.color.textSecondary
+                      }
+                    />
+                  </View>
+
+                  <View
+                    style={
+                      styles.gymRowCopy
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.gymRowName
+                      }
+                    >
+                      {gym.name}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.gymRowMeta
+                      }
+                    >
+                      {gym.currencyCode ||
+                        'Currency'}
+                      {'  -  '}
+                      {gym.countryCode ||
+                        'Market'}
+                    </Text>
+                  </View>
+
+                  {busy ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={
+                        ui.color.brand
+                      }
+                    />
+                  ) : selected ? (
+                    <StatusPill
+                      label="ACTIVE"
+                      toneName="success"
+                    />
+                  ) : (
+                    <View
+                      style={
+                        styles.switchAction
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.switchText
+                        }
+                      >
+                        Switch
+                      </Text>
+
+                      <Ionicons
+                        name="chevron-forward"
+                        size={17}
+                        color={
+                          ui.color.brand
+                        }
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            }
+          )}
+
+          {gyms.length === 0 ? (
+            <View
+              style={
+                styles.emptyGyms
+              }
+            >
+              <Text
+                style={
+                  styles.emptyTitle
+                }
+              >
+                No connected gyms
+              </Text>
+              <Text
+                style={
+                  styles.emptyText
+                }
+              >
+                Join or create a gym to
+                use the owner workspace.
+              </Text>
+            </View>
+          ) : null}
+        </SurfaceCard>
       </View>
 
-      <View style={styles.securityNote}>
+      <View style={styles.infoCard}>
         <Ionicons
-          name="lock-closed-outline"
-          size={19}
-          color="#475569"
+          name="information-circle-outline"
+          size={20}
+          color={ui.color.textSecondary}
         />
-        <Text style={styles.securityText}>
-          Staff invitations now expire automatically. The old permanent join
-          code is no longer used for new staff access.
-        </Text>
+
+        <View style={styles.flex}>
+          <Text
+            style={
+              styles.infoTitle
+            }
+          >
+            Keep daily work simple
+          </Text>
+
+          <Text
+            style={styles.infoText}
+          >
+            Members, attendance and
+            payments remain in the five
+            main tabs. This workspace is
+            intentionally reserved for
+            management tasks.
+          </Text>
+        </View>
       </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
+const ToolCard = ({
+  tool,
+  wide = false,
+  onPress,
+}: {
+  tool: OwnerTool;
+  wide?: boolean;
+  onPress: () => void;
+}) => {
+  const colors =
+    colorsFor(tool.tone);
+
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      activeOpacity={0.77}
+      onPress={onPress}
+      style={[
+        styles.toolCard,
+        wide &&
+          styles.toolCardWide,
+      ]}
+    >
+      <View
+        style={[
+          styles.toolIcon,
+          {
+            backgroundColor:
+              colors.background,
+          },
+        ]}
+      >
+        <Ionicons
+          name={tool.icon}
+          size={21}
+          color={
+            colors.foreground
+          }
+        />
+      </View>
+
+      <Text
+        style={styles.toolTitle}
+      >
+        {tool.title}
+      </Text>
+
+      <Text
+        style={
+          styles.toolSubtitle
+        }
+      >
+        {tool.subtitle}
+      </Text>
+
+      <View
+        style={styles.toolFooter}
+      >
+        <Text
+          style={styles.openText}
+        >
+          Open
+        </Text>
+
+        <Ionicons
+          name="arrow-forward"
+          size={17}
+          color={ui.color.brand}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const Meta = ({
+  icon,
+  label,
+  value,
+}: {
+  icon:
+    keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) => (
+  <View style={styles.metaItem}>
+    <View
+      style={styles.metaIcon}
+    >
+      <Ionicons
+        name={icon}
+        size={16}
+        color={ui.color.brand}
+      />
+    </View>
+
+    <View style={styles.flex}>
+      <Text
+        style={styles.metaLabel}
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={styles.metaValue}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  </View>
+);
+
+const styles = createAdaptiveStyles({
   page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor:
+      ui.color.canvas,
   },
+
   content: {
-    padding: 18,
-    paddingBottom: 44,
+    padding: ui.space.lg,
+    paddingBottom: 46,
   },
+
+  flex: {
+    flex: 1,
+  },
+
   hero: {
-    backgroundColor: '#312E81',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 24,
+    backgroundColor:
+      ui.color.brandStrong,
+    borderRadius: ui.radius.xl,
+    padding: ui.space.xl,
+    marginBottom: ui.space.md,
   },
+
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent:
+      'space-between',
   },
-  gymMark: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor:
+      'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    marginRight: 14,
   },
-  heroCopy: {
-    flex: 1,
-  },
-  heroEyebrow: {
+
+  eyebrow: {
     color: '#C7D2FE',
-    fontSize: 10,
+    fontSize: ui.type.eyebrow,
     fontWeight: '900',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: ui.space.lg,
   },
-  gymName: {
+
+  heroTitle: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: ui.type.page,
     fontWeight: '900',
     marginTop: 3,
   },
-  gymMeta: {
+
+  heroSubtitle: {
     color: '#E0E7FF',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: ui.type.bodySm,
+    lineHeight: 17,
     marginTop: 5,
+    maxWidth: 330,
   },
-  accessPill: {
-    marginTop: 16,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+
+  gymCard: {
+    padding: ui.space.lg,
+    marginBottom: ui.space.xl,
+  },
+
+  gymCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.md,
+  },
+
+  sectionEyebrow: {
+    color: ui.color.textMuted,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  gymName: {
+    color: ui.color.text,
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+
+  activeBadge: {
+    minHeight: 34,
+    borderRadius: ui.radius.pill,
+    backgroundColor:
+      ui.color.successSoft,
+    borderWidth: 1,
+    borderColor:
+      ui.color.successBorder,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  accessText: {
-    color: '#E0E7FF',
-    fontSize: 11,
-    fontWeight: '800',
+
+  activeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor:
+      ui.color.success,
   },
-  sectionLabel: {
-    color: '#64748B',
-    fontSize: 11,
+
+  activeText: {
+    color: ui.color.success,
+    fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 1.1,
-    marginBottom: 9,
+  },
+
+  metaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ui.space.sm,
+    marginTop: ui.space.lg,
+  },
+
+  metaItem: {
+    width: '48%',
+    minHeight: 58,
+    borderRadius: ui.radius.md,
+    backgroundColor:
+      ui.color.surfaceSubtle,
+    padding: ui.space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  metaIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor:
+      ui.color.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.sm,
+  },
+
+  metaLabel: {
+    color: ui.color.textMuted,
+    fontSize: 7,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  metaValue: {
+    color: ui.color.text,
+    fontSize: 9,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+
+  section: {
+    marginBottom: ui.space.xl,
+  },
+
+  toolGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ui.space.sm,
+  },
+
+  toolCard: {
+    width: '48.5%',
+    minHeight: 150,
+    borderRadius: ui.radius.lg,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    backgroundColor:
+      ui.color.surface,
+    padding: ui.space.md,
+  },
+
+  toolCardWide: {
+    width: '100%',
+    minHeight: 134,
+  },
+
+  toolIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: ui.space.md,
+  },
+
+  toolTitle: {
+    color: ui.color.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  toolSubtitle: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 4,
+    flex: 1,
+  },
+
+  toolFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: ui.space.md,
+  },
+
+  openText: {
+    color: ui.color.brand,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  gymRow: {
+    minHeight: 72,
+    paddingHorizontal: ui.space.md,
+    paddingVertical: ui.space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor:
+      ui.color.divider,
+  },
+
+  gymIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor:
+      ui.color.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: ui.space.md,
+  },
+
+  gymIconActive: {
+    backgroundColor:
+      ui.color.brandSoft,
+  },
+
+  gymRowCopy: {
+    flex: 1,
+  },
+
+  gymRowName: {
+    color: ui.color.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  gymRowMeta: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    marginTop: 3,
+  },
+
+  switchAction: {
+    minHeight: ui.touch.min,
+    paddingLeft: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+
+  switchText: {
+    color: ui.color.brand,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  emptyGyms: {
+    padding: ui.space.xl,
+    alignItems: 'center',
+  },
+
+  emptyTitle: {
+    color: ui.color.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  emptyText: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    textAlign: 'center',
     marginTop: 4,
   },
-  actionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
+
+  infoCard: {
+    backgroundColor:
+      ui.color.surfaceSubtle,
+    borderRadius: ui.radius.md,
+    padding: ui.space.md,
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
+    alignItems: 'flex-start',
+    gap: ui.space.sm,
   },
-  actionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 13,
-  },
-  actionIconIndigo: {
-    backgroundColor: '#EEF2FF',
-  },
-  actionIconGreen: {
-    backgroundColor: '#ECFDF5',
-  },
-  actionIconAmber: {
-    backgroundColor: '#FFFBEB',
-  },
-  actionCopy: {
-    flex: 1,
-  },
-  actionTitle: {
-    color: '#0F172A',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  actionSubtitle: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 15,
-    marginBottom: 16,
-  },
-  gymRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-  },
-  gymRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  gymRowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-  gymRowInfo: {
-    flex: 1,
-  },
-  gymRowName: {
-    color: '#0F172A',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  gymRowSlug: {
-    color: '#94A3B8',
-    fontSize: 11,
-    marginTop: 3,
-  },
-  statusBadge: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusBadgeActive: {
-    backgroundColor: '#EEF2FF',
-  },
-  statusText: {
-    color: '#64748B',
+
+  infoTitle: {
+    color: ui.color.text,
     fontSize: 10,
     fontWeight: '900',
   },
-  statusTextActive: {
-    color: '#4F46E5',
-  },
-  emptyState: {
-    color: '#94A3B8',
-    paddingVertical: 18,
-  },
-  securityNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 15,
-    padding: 14,
-    gap: 9,
-  },
-  securityText: {
-    flex: 1,
-    color: '#475569',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
+
+  infoText: {
+    color: ui.color.textSecondary,
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 2,
   },
 });
 

@@ -1,13 +1,29 @@
 import React from 'react';
 import {
-  View,
-  Text,
+  ActivityIndicator,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+  useIsFocused,
+} from '@react-navigation/native';
+import {
+  createBottomTabNavigator,
+} from '@react-navigation/bottom-tabs';
+import {
+  createStackNavigator,
+} from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 import DashboardScreen from '../screens/DashboardScreen';
 import ClientsScreen from '../screens/ClientsScreen';
@@ -23,207 +39,920 @@ import GymManagementScreen from '../screens/GymManagementScreen';
 import JoinGymScreen from '../screens/JoinGymScreen';
 import StaffManagementScreen from '../screens/StaffManagementScreen';
 import AuditLogScreen from '../screens/AuditLogScreen';
+import MembershipPlansScreen from '../screens/MembershipPlansScreen';
+import AttendanceScreen from '../screens/AttendanceScreen';
+import QRScannerScreen from '../screens/QRScannerScreen';
+import MemberCardScreen from '../screens/MemberCardScreen';
+import FinanceDashboardScreen from '../screens/FinanceDashboardScreen';
+import ExpensesScreen from '../screens/ExpensesScreen';
+import ReceiptScreen from '../screens/ReceiptScreen';
+import WhatsAppToolsScreen from '../screens/WhatsAppToolsScreen';
+import PrivacyAccountScreen from '../screens/PrivacyAccountScreen';
 
-import { useAuth } from '../contexts/AuthContext';
-import { useGym } from '../contexts/GymContext';
+import {
+  useAuth,
+} from '../contexts/AuthContext';
+import {
+  useGym,
+} from '../contexts/GymContext';
+import {
+  SidePanelProvider,
+  useSidePanel,
+} from '../contexts/SidePanelContext';
+import {
+  LiveDataProvider,
+  useLiveData,
+} from '../contexts/LiveDataContext';
+import {
+  NotificationCenterProvider,
+  useNotificationCenter,
+} from '../contexts/NotificationCenterContext';
+import {
+  WorkspaceSidePanel,
+} from '../components/WorkspaceSidePanel';
+import {
+  useAppearanceTheme,
+} from '../theme/appearance';
 
 const Tab = createBottomTabNavigator();
 const RootStack = createStackNavigator();
 const ClientStackNavigator = createStackNavigator();
 const PaymentStackNavigator = createStackNavigator();
-const OnboardingStackNavigator = createStackNavigator();
-const SignedOutStackNavigator = createStackNavigator();
+const GymOnboardingStack = createStackNavigator();
 
-const sharedHeaderOptions = {
-  headerStyle: {
-    backgroundColor: '#312E81',
-  },
-  headerTintColor: '#FFFFFF',
-  headerTitleStyle: {
-    fontWeight: 'bold' as const,
-    fontSize: 18,
-  },
-  headerTitleAlign: 'center' as const,
+const withLiveRefresh = (
+  Component: React.ComponentType<any>
+) => {
+  const LiveComponent = (
+    props: any
+  ) => {
+    const {
+      revision,
+    } = useLiveData();
+
+    const isFocused =
+      useIsFocused();
+
+    return (
+      <Component
+        key={
+          `${revision}-${isFocused ? 'focused' : 'blurred'}`
+        }
+        {...props}
+      />
+    );
+  };
+
+  return LiveComponent;
 };
 
-const ClientStack = () => (
-  <ClientStackNavigator.Navigator screenOptions={sharedHeaderOptions}>
-    <ClientStackNavigator.Screen
-      name="ClientsList"
-      component={ClientsScreen}
-      options={{ title: 'Clients', headerShown: false }}
-    />
-    <ClientStackNavigator.Screen
-      name="ClientDetail"
-      component={ClientDetailScreen}
-      options={{ headerShown: false }}
-    />
-    <ClientStackNavigator.Screen
-      name="AddClient"
-      component={AddClientScreen}
-      options={{ title: 'Add Client', headerShown: false }}
-    />
-  </ClientStackNavigator.Navigator>
-);
+const LiveDashboard =
+  withLiveRefresh(
+    DashboardScreen
+  );
 
-const PaymentStack = () => (
-  <PaymentStackNavigator.Navigator screenOptions={sharedHeaderOptions}>
-    <PaymentStackNavigator.Screen
-      name="PaymentsList"
-      component={PaymentsScreen}
-      options={{ title: 'Payments', headerShown: false }}
-    />
-    <PaymentStackNavigator.Screen
-      name="AddPayment"
-      component={AddPaymentScreen}
-      options={{ title: 'Add Payment', headerShown: false }}
-    />
-  </PaymentStackNavigator.Navigator>
-);
+const LiveClients =
+  withLiveRefresh(
+    ClientsScreen
+  );
 
-const MainTabs = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      tabBarIcon: ({ focused, color, size }) => {
-        let iconName: keyof typeof Ionicons.glyphMap;
+const LiveClientDetail =
+  withLiveRefresh(
+    ClientDetailScreen
+  );
 
-        if (route.name === 'Dashboard') {
-          iconName = focused ? 'stats-chart' : 'stats-chart-outline';
-        } else if (route.name === 'Clients') {
-          iconName = focused ? 'people' : 'people-outline';
-        } else if (route.name === 'Payments') {
-          iconName = focused ? 'card' : 'card-outline';
-        } else if (route.name === 'Notifications') {
-          iconName = focused
-            ? 'notifications'
-            : 'notifications-outline';
-        } else {
-          iconName = focused ? 'settings' : 'settings-outline';
+const LivePayments =
+  withLiveRefresh(
+    PaymentsScreen
+  );
+
+const LiveAttendance =
+  withLiveRefresh(
+    AttendanceScreen
+  );
+
+const LiveMemberCard =
+  withLiveRefresh(
+    MemberCardScreen
+  );
+
+const LiveFinance =
+  withLiveRefresh(
+    FinanceDashboardScreen
+  );
+
+const LiveExpenses =
+  withLiveRefresh(
+    ExpensesScreen
+  );
+
+const ClientStack = () => {
+  const theme =
+    useAppearanceTheme();
+
+  return (
+    <ClientStackNavigator.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: {
+          backgroundColor:
+            theme.colors.canvas,
+        },
+      }}
+    >
+      <ClientStackNavigator.Screen
+        name="ClientsList"
+        component={LiveClients}
+      />
+      <ClientStackNavigator.Screen
+        name="ClientDetail"
+        component={LiveClientDetail}
+      />
+      <ClientStackNavigator.Screen
+        name="AddClient"
+        component={AddClientScreen}
+      />
+    </ClientStackNavigator.Navigator>
+  );
+};
+
+const PaymentStack = () => {
+  const theme =
+    useAppearanceTheme();
+
+  return (
+    <PaymentStackNavigator.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: {
+          backgroundColor:
+            theme.colors.canvas,
+        },
+      }}
+    >
+      <PaymentStackNavigator.Screen
+        name="PaymentsList"
+        component={LivePayments}
+      />
+      <PaymentStackNavigator.Screen
+        name="AddPayment"
+        component={AddPaymentScreen}
+      />
+    </PaymentStackNavigator.Navigator>
+  );
+};
+
+const MainTabShell = ({
+  rootNavigation,
+}: {
+  rootNavigation: any;
+}) => {
+  const theme =
+    useAppearanceTheme();
+
+  const insets =
+    useSafeAreaInsets();
+
+  const {
+    activeGym,
+  } = useGym();
+
+  const {
+    openPanel,
+  } = useSidePanel();
+
+  const {
+    unreadCount,
+    realtimeConnected,
+  } =
+    useNotificationCenter();
+
+  const bottomInset =
+    Math.max(
+      insets.bottom,
+      8
+    );
+
+  const badgeLabel =
+    unreadCount > 99
+      ? '99+'
+      : String(
+          unreadCount
+        );
+
+  return (
+    <SafeAreaView
+      style={[
+        styles.mainShell,
+        {
+          backgroundColor:
+            theme.colors.surface,
+        },
+      ]}
+      edges={['top']}
+    >
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor:
+              theme.colors.surface,
+            borderBottomColor:
+              theme.colors.border,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Open workspace menu"
+          onPress={openPanel}
+          activeOpacity={0.75}
+          style={[
+            styles.topButton,
+            {
+              backgroundColor:
+                theme.colors.surfaceSubtle,
+              borderColor:
+                theme.colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name="menu"
+            size={25}
+            color={
+              theme.colors.text
+            }
+          />
+        </TouchableOpacity>
+
+        <View
+          style={
+            styles.topBarCopy
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.topBarTitle,
+              {
+                color:
+                  theme.colors.text,
+              },
+            ]}
+          >
+            {activeGym?.name ||
+              'Gym Manager'}
+          </Text>
+
+          <View
+            style={
+              styles.topBarSubRow
+            }
+          >
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    realtimeConnected
+                      ? theme.colors.brand
+                      : theme.colors.muted,
+                },
+              ]}
+            />
+
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.topBarSubtitle,
+                {
+                  color:
+                    theme.colors.muted,
+                },
+              ]}
+            >
+              {realtimeConnected
+                ? 'Live front desk'
+                : 'Front desk workspace'}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadCount > 0
+              ? `Notifications, ${unreadCount} unread`
+              : 'Notifications'
+          }
+          onPress={() =>
+            rootNavigation.navigate(
+              'Notifications'
+            )
+          }
+          activeOpacity={0.75}
+          style={[
+            styles.topButton,
+            {
+              backgroundColor:
+                unreadCount > 0
+                  ? theme.colors.brandSoft
+                  : theme.colors.surfaceSubtle,
+              borderColor:
+                unreadCount > 0
+                  ? theme.colors.brand
+                  : theme.colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name={
+              unreadCount > 0
+                ? 'notifications'
+                : 'notifications-outline'
+            }
+            size={22}
+            color={
+              unreadCount > 0
+                ? theme.colors.brand
+                : theme.colors.text
+            }
+          />
+
+          {unreadCount > 0 ? (
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor:
+                    theme.colors.danger,
+                },
+              ]}
+            >
+              <Text
+                style={
+                  styles.badgeText
+                }
+              >
+                {badgeLabel}
+              </Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={styles.tabArea}
+      >
+        <Tab.Navigator
+          screenOptions={({
+            route,
+          }) => ({
+            headerShown: false,
+            tabBarHideOnKeyboard:
+              true,
+
+            tabBarIcon: ({
+              focused,
+              color,
+              size,
+            }) => {
+              let iconName:
+                keyof typeof Ionicons.glyphMap;
+
+              if (
+                route.name ===
+                'Dashboard'
+              ) {
+                iconName =
+                  focused
+                    ? 'home'
+                    : 'home-outline';
+              } else if (
+                route.name ===
+                'Clients'
+              ) {
+                iconName =
+                  focused
+                    ? 'people'
+                    : 'people-outline';
+              } else if (
+                route.name ===
+                'Attendance'
+              ) {
+                iconName =
+                  focused
+                    ? 'scan-circle'
+                    : 'scan-circle-outline';
+              } else if (
+                route.name ===
+                'Payments'
+              ) {
+                iconName =
+                  focused
+                    ? 'receipt'
+                    : 'receipt-outline';
+              } else {
+                iconName =
+                  focused
+                    ? 'settings'
+                    : 'settings-outline';
+              }
+
+              return (
+                <Ionicons
+                  name={iconName}
+                  size={size}
+                  color={color}
+                />
+              );
+            },
+
+            tabBarActiveTintColor:
+              theme.colors.brand,
+
+            tabBarInactiveTintColor:
+              theme.colors.muted,
+
+            tabBarLabelStyle: {
+              fontSize: 10,
+              fontWeight: '800',
+              marginTop: 1,
+            },
+
+            tabBarItemStyle: {
+              flex: 1,
+              paddingHorizontal: 0,
+            },
+
+            tabBarStyle: {
+              height:
+                58 +
+                bottomInset,
+              paddingTop: 6,
+              paddingBottom:
+                bottomInset,
+              paddingHorizontal: 0,
+              backgroundColor:
+                theme.colors.surface,
+              borderTopColor:
+                theme.colors.border,
+              borderTopWidth:
+                StyleSheet.hairlineWidth,
+              elevation: 0,
+            },
+          })}
+        >
+          <Tab.Screen
+            name="Dashboard"
+            component={
+              LiveDashboard
+            }
+          />
+
+          <Tab.Screen
+            name="Clients"
+            component={
+              ClientStack
+            }
+            options={{
+              title: 'Members',
+            }}
+          />
+
+          <Tab.Screen
+            name="Attendance"
+            component={
+              LiveAttendance
+            }
+          />
+
+          <Tab.Screen
+            name="Payments"
+            component={
+              PaymentStack
+            }
+          />
+
+          <Tab.Screen
+            name="Settings"
+            component={
+              SettingsScreen
+            }
+          />
+        </Tab.Navigator>
+      </View>
+
+      <WorkspaceSidePanel
+        rootNavigation={
+          rootNavigation
         }
+      />
+    </SafeAreaView>
+  );
+};
 
-        return <Ionicons name={iconName} size={size} color={color} />;
-      },
-      tabBarActiveTintColor: '#4F46E5',
-      tabBarInactiveTintColor: '#64748B',
-      headerStyle: {
-        backgroundColor: '#312E81',
-      },
-      headerTintColor: '#FFFFFF',
-      headerTitleStyle: {
-        fontWeight: 'bold',
-        fontSize: 18,
-      },
-      headerTitleAlign: 'center',
-    })}
-  >
-    <Tab.Screen name="Dashboard" component={DashboardScreen} />
-    <Tab.Screen name="Clients" component={ClientStack} />
-    <Tab.Screen name="Payments" component={PaymentStack} />
-    <Tab.Screen name="Notifications" component={NotificationsScreen} />
-    <Tab.Screen
-      name="Settings"
-      component={SettingsScreen}
-      options={{ headerShown: false }}
+const MainTabs = ({
+  navigation,
+}: any) => (
+  <SidePanelProvider>
+    <MainTabShell
+      rootNavigation={
+        navigation
+      }
     />
-  </Tab.Navigator>
+  </SidePanelProvider>
 );
 
-const SignedOutStack = () => (
-  <SignedOutStackNavigator.Navigator
-    screenOptions={{ headerShown: false }}
-  >
-    <SignedOutStackNavigator.Screen
-      name="Login"
-      component={LoginScreen}
-    />
-  </SignedOutStackNavigator.Navigator>
-);
-
-const GymOnboardingStack = () => (
-  <OnboardingStackNavigator.Navigator
+const GymEntry = () => (
+  <GymOnboardingStack.Navigator
     initialRouteName="GymSetup"
-    screenOptions={sharedHeaderOptions}
+    screenOptions={{
+      headerShown: false,
+    }}
   >
-    <OnboardingStackNavigator.Screen
+    <GymOnboardingStack.Screen
       name="GymSetup"
-      component={GymSetupScreen}
-      options={{ title: 'Create or Join Gym', headerShown: false }}
+      component={
+        GymSetupScreen
+      }
     />
-    <OnboardingStackNavigator.Screen
+
+    <GymOnboardingStack.Screen
       name="JoinGym"
-      component={JoinGymScreen}
-      options={{ title: 'Join Gym' }}
+      component={
+        JoinGymScreen
+      }
     />
-  </OnboardingStackNavigator.Navigator>
+  </GymOnboardingStack.Navigator>
 );
 
-const AuthenticatedApp = () => (
-  <RootStack.Navigator screenOptions={sharedHeaderOptions}>
-    <RootStack.Screen
-      name="Main"
-      component={MainTabs}
-      options={{ headerShown: false }}
-    />
-    <RootStack.Screen
-      name="GymManagement"
-      component={GymManagementScreen}
-      options={{ title: 'Gym Management' }}
-    />
-    <RootStack.Screen
-      name="JoinGym"
-      component={JoinGymScreen}
-      options={{ title: 'Join Gym' }}
-    />
-    <RootStack.Screen
-      name="StaffManagement"
-      component={StaffManagementScreen}
-      options={{ title: 'Staff & Roles' }}
-    />
-    <RootStack.Screen
-      name="AuditLog"
-      component={AuditLogScreen}
-      options={{ title: 'Activity Log' }}
-    />
-  </RootStack.Navigator>
-);
+const AuthenticatedApp = () => {
+  const theme =
+    useAppearanceTheme();
 
-const AppNavigator = () => {
-  const { user, isLoading: authLoading } = useAuth();
-  const { activeGym, isLoading: gymsLoading } = useGym();
+  return (
+    <RootStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor:
+            theme.isDark
+              ? '#17213A'
+              : '#312E81',
+        },
+        headerTintColor:
+          '#FFFFFF',
+        headerTitleStyle: {
+          fontWeight: '900',
+          fontSize: 17,
+        },
+        headerTitleAlign:
+          'center',
+        cardStyle: {
+          backgroundColor:
+            theme.colors.canvas,
+        },
+      }}
+    >
+      <RootStack.Screen
+        name="RootTabs"
+        component={MainTabs}
+        options={{
+          headerShown: false,
+        }}
+      />
 
-  if (authLoading || (user && gymsLoading)) {
+      <RootStack.Screen
+        name="Notifications"
+        component={
+          NotificationsScreen
+        }
+        options={{
+          title:
+            'Notifications',
+        }}
+      />
+
+      <RootStack.Screen
+        name="GymManagement"
+        component={
+          GymManagementScreen
+        }
+        options={{
+          title:
+            'Owner workspace',
+        }}
+      />
+
+      <RootStack.Screen
+        name="JoinGym"
+        component={
+          JoinGymScreen
+        }
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <RootStack.Screen
+        name="StaffManagement"
+        component={
+          StaffManagementScreen
+        }
+        options={{
+          title:
+            'Staff and Roles',
+        }}
+      />
+
+      <RootStack.Screen
+        name="AuditLog"
+        component={
+          AuditLogScreen
+        }
+        options={{
+          title:
+            'Activity Log',
+        }}
+      />
+
+      <RootStack.Screen
+        name="MembershipPlans"
+        component={
+          MembershipPlansScreen
+        }
+        options={{
+          title:
+            'Membership Plans',
+        }}
+      />
+
+      <RootStack.Screen
+        name="QRScanner"
+        component={
+          QRScannerScreen
+        }
+        options={{
+          headerShown: false,
+          presentation:
+            'modal',
+        }}
+      />
+
+      <RootStack.Screen
+        name="MemberCard"
+        component={
+          LiveMemberCard
+        }
+        options={{
+          title:
+            'Member Card',
+        }}
+      />
+
+      <RootStack.Screen
+        name="FinanceDashboard"
+        component={
+          LiveFinance
+        }
+        options={{
+          title: 'Finance',
+        }}
+      />
+
+      <RootStack.Screen
+        name="Expenses"
+        component={
+          LiveExpenses
+        }
+        options={{
+          title:
+            'Expenses',
+        }}
+      />
+
+      <RootStack.Screen
+        name="Receipt"
+        component={
+          ReceiptScreen
+        }
+        options={{
+          title:
+            'Receipt',
+        }}
+      />
+
+      <RootStack.Screen
+        name="WhatsAppTools"
+        component={
+          WhatsAppToolsScreen
+        }
+        options={{
+          title:
+            'WhatsApp Tools',
+        }}
+      />
+
+        <RootStack.Screen
+          name="PrivacyAccount"
+          component={PrivacyAccountScreen}
+          options={{
+            title: 'Privacy and Account',
+          }}
+        />
+
+    </RootStack.Navigator>
+  );
+};
+
+const NavigationShell = () => {
+  const {
+    user,
+    isLoading:
+      authLoading,
+  } = useAuth();
+
+  const {
+    activeGym,
+    isLoading:
+      gymsLoading,
+  } = useGym();
+
+  const theme =
+    useAppearanceTheme();
+
+  if (
+    authLoading ||
+    (user &&
+      gymsLoading)
+  ) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading gym access...</Text>
+      <View
+        style={[
+          styles.loading,
+          {
+            backgroundColor:
+              theme.colors.canvas,
+          },
+        ]}
+      >
+        <ActivityIndicator
+          size="large"
+          color={
+            theme.colors.brand
+          }
+        />
       </View>
     );
   }
 
+  const base =
+    theme.isDark
+      ? DarkTheme
+      : DefaultTheme;
+
+  const navigationTheme = {
+    ...base,
+    dark:
+      theme.isDark,
+    colors: {
+      ...base.colors,
+      primary:
+        theme.colors.brand,
+      background:
+        theme.colors.canvas,
+      card:
+        theme.colors.surface,
+      text:
+        theme.colors.text,
+      border:
+        theme.colors.border,
+      notification:
+        theme.colors.danger,
+    },
+  };
+
   return (
-    <NavigationContainer>
-      {!user ? (
-        <SignedOutStack />
-      ) : activeGym ? (
-        <AuthenticatedApp />
-      ) : (
-        <GymOnboardingStack />
-      )}
-    </NavigationContainer>
+    <>
+      <StatusBar
+        style={
+          theme.isDark
+            ? 'light'
+            : 'dark'
+        }
+      />
+
+      <NavigationContainer
+        key={
+          `appearance-${theme.mode}-${theme.resolved}`
+        }
+        theme={
+          navigationTheme
+        }
+      >
+        {!user ? (
+          <LoginScreen />
+        ) : activeGym ? (
+          <AuthenticatedApp />
+        ) : (
+          <GymEntry />
+        )}
+      </NavigationContainer>
+    </>
   );
 };
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#475569',
-    fontWeight: '700',
-  },
-});
+const AppNavigator = () => (
+  <LiveDataProvider>
+    <NotificationCenterProvider>
+      <NavigationShell />
+    </NotificationCenterProvider>
+  </LiveDataProvider>
+);
+
+const styles =
+  StyleSheet.create({
+    mainShell: {
+      flex: 1,
+    },
+
+    tabArea: {
+      flex: 1,
+    },
+
+    topBar: {
+      minHeight: 58,
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderBottomWidth:
+        StyleSheet.hairlineWidth,
+    },
+
+    topButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    topBarCopy: {
+      flex: 1,
+      paddingHorizontal: 12,
+    },
+
+    topBarTitle: {
+      fontSize: 16,
+      fontWeight: '900',
+    },
+
+    topBarSubRow: {
+      marginTop: 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 999,
+    },
+
+    topBarSubtitle: {
+      flex: 1,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    badge: {
+      position: 'absolute',
+      top: -5,
+      right: -7,
+      minWidth: 19,
+      height: 19,
+      borderRadius: 999,
+      paddingHorizontal: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+    },
+
+    badgeText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '900',
+    },
+
+    loading: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
 
 export default AppNavigator;

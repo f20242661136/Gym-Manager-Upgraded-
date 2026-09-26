@@ -1,193 +1,698 @@
-import React, { useState, useEffect } from 'react';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   TextInput,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+
 import { api } from '../services/api';
-import { Client } from '../types';
+import type { Client } from '../types';
 import ClientCard from '../components/ClientCard';
+import {
+  EmptyState,
+  StatusPill,
+} from '../ui/components';
+import { ui } from '../ui/theme';
 
-interface ClientsScreenProps {
+type Filter =
+  | 'all'
+  | 'active'
+  | 'renewal'
+  | 'sync';
+
+const isExpired = (client: Client) => {
+  if (!client.membershipDueDate) {
+    return client.membershipStatus !== 'Paid';
+  }
+
+  const due =
+    new Date(
+      client.membershipDueDate
+    ).getTime();
+
+  return (
+    Number.isFinite(due) &&
+    due < Date.now()
+  );
+};
+
+const isActive = (client: Client) =>
+  client.membershipStatus === 'Paid' &&
+  !isExpired(client);
+
+const ClientsScreen: React.FC<{
   navigation: any;
-}
+}> = ({ navigation }) => {
+  const [clients, setClients] =
+    useState<Client[]>([]);
 
-const ClientsScreen: React.FC<ClientsScreenProps> = ({ navigation }) => {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] =
+    useState('');
 
-  const loadClients = async () => {
-    try {
-      const clientsData = await api.getClients();
-      setClients(clientsData);
-      setFilteredClients(clientsData);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load clients');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const [filter, setFilter] =
+    useState<Filter>('all');
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const loadClients =
+    useCallback(async () => {
+      try {
+        setError(null);
+
+        const result =
+          await api.getClients();
+
+        setClients(result);
+      } catch (loadError) {
+        console.error(
+          'Member list failed:',
+          loadError
+        );
+
+        setError(
+          'Members could not be refreshed.'
+        );
+      } finally {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+    }, []);
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [loadClients]);
 
-  useEffect(() => {
-    if (searchQuery) {
-      const filtered = clients.filter(client =>
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredClients(filtered);
-    } else {
-      setFilteredClients(clients);
-    }
-  }, [searchQuery, clients]);
+  const counts = useMemo(() => {
+    const active =
+      clients.filter(isActive).length;
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadClients();
+    const renewal =
+      clients.filter(
+        client => !isActive(client)
+      ).length;
+
+    const sync =
+      clients.filter(
+        client =>
+          client.syncState ===
+            'pending' ||
+          client.syncState ===
+            'failed'
+      ).length;
+
+    return {
+      all: clients.length,
+      active,
+      renewal,
+      sync,
+    };
+  }, [clients]);
+
+  const filtered = useMemo(() => {
+    const query =
+      searchQuery
+        .trim()
+        .toLowerCase();
+
+    return clients
+      .filter(client => {
+        if (filter === 'active') {
+          return isActive(client);
+        }
+
+        if (filter === 'renewal') {
+          return !isActive(client);
+        }
+
+        if (filter === 'sync') {
+          return (
+            client.syncState ===
+              'pending' ||
+            client.syncState ===
+              'failed'
+          );
+        }
+
+        return true;
+      })
+      .filter(client => {
+        if (!query) return true;
+
+        return [
+          client.name,
+          client.phone,
+          client.email,
+        ]
+          .filter(Boolean)
+          .some(value =>
+            String(value)
+              .toLowerCase()
+              .includes(query)
+          );
+      });
+  }, [
+    clients,
+    filter,
+    searchQuery,
+  ]);
+
+  const openClient = (
+    client: Client
+  ) => {
+    navigation.navigate(
+      'ClientDetail',
+      {
+        clientId: client.id,
+      }
+    );
   };
 
-  const handleClientPress = (client: Client) => {
-    navigation.navigate('Clients', { screen: 'ClientDetail', params: { clientId: client.id } });
-  };
-
-  const handleAddClient = () => {
-    navigation.navigate('Clients', { screen: 'AddClient' });
+  const addMember = () => {
+    navigation.navigate('AddClient');
   };
 
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <Text>Loading clients...</Text>
+      <View style={styles.loading}>
+        <ActivityIndicator
+          size="large"
+          color={ui.color.brand}
+        />
+        <Text style={styles.loadingText}>
+          Loading members...
+        </Text>
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#6B7280" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search clients..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+  const filters: {
+    key: Filter;
+    label: string;
+    count: number;
+  }[] = [
+    {
+      key: 'all',
+      label: 'All',
+      count: counts.all,
+    },
+    {
+      key: 'active',
+      label: 'Active',
+      count: counts.active,
+    },
+    {
+      key: 'renewal',
+      label: 'Needs renewal',
+      count: counts.renewal,
+    },
+    {
+      key: 'sync',
+      label: 'Sync',
+      count: counts.sync,
+    },
+  ];
 
-      {/* Clients List */}
+  return (
+    <View style={styles.page}>
       <FlatList
-        data={filteredClients}
-        keyExtractor={(item) => item.id}
+        data={filtered}
+        keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <ClientCard client={item} onPress={() => handleClientPress(item)} />
+          <ClientCard
+            client={item}
+            onPress={() =>
+              openClient(item)
+            }
+          />
         )}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadClients();
+            }}
+            tintColor={ui.color.brand}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={
+          styles.listContent
+        }
+        ListHeaderComponent={
+          <>
+            <View style={styles.hero}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.eyebrow}>
+                  MEMBER DIRECTORY
+                </Text>
+
+                <Text style={styles.heroTitle}>
+                  Members
+                </Text>
+
+                <Text
+                  style={
+                    styles.heroSubtitle
+                  }
+                >
+                  Find a member fast,
+                  see membership state,
+                  then act.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Add member"
+                style={styles.addButton}
+                onPress={addMember}
+              >
+                <Ionicons
+                  name="person-add-outline"
+                  size={19}
+                  color="#FFFFFF"
+                />
+                <Text
+                  style={
+                    styles.addButtonText
+                  }
+                >
+                  Add
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {error ? (
+              <TouchableOpacity
+                onPress={loadClients}
+                style={styles.errorBar}
+              >
+                <Ionicons
+                  name="cloud-offline-outline"
+                  size={18}
+                  color={
+                    ui.color.warning
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.errorText
+                  }
+                >
+                  {error} Tap to retry.
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <View style={styles.search}>
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={
+                  ui.color.textMuted
+                }
+              />
+
+              <TextInput
+                value={searchQuery}
+                onChangeText={
+                  setSearchQuery
+                }
+                style={styles.searchInput}
+                placeholder="Search name, phone or email"
+                placeholderTextColor={
+                  ui.color.textMuted
+                }
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+
+              {searchQuery ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() =>
+                    setSearchQuery('')
+                  }
+                  style={
+                    styles.clearButton
+                  }
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={
+                      ui.color.textMuted
+                    }
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <FlatList
+              horizontal
+              data={filters}
+              keyExtractor={item =>
+                item.key
+              }
+              showsHorizontalScrollIndicator={
+                false
+              }
+              contentContainerStyle={
+                styles.filterRow
+              }
+              renderItem={({ item }) => {
+                const selected =
+                  item.key === filter;
+
+                return (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() =>
+                      setFilter(item.key)
+                    }
+                    style={[
+                      styles.filterChip,
+                      selected &&
+                        styles.filterChipOn,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        selected &&
+                          styles.filterTextOn,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.countBubble,
+                        selected &&
+                          styles.countBubbleOn,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.countText,
+                          selected &&
+                            styles.countTextOn,
+                        ]}
+                      >
+                        {item.count}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+
+            <View
+              style={styles.resultHeader}
+            >
+              <Text
+                style={styles.resultTitle}
+              >
+                {filter === 'all'
+                  ? 'All members'
+                  : filter === 'active'
+                    ? 'Active members'
+                    : filter === 'renewal'
+                      ? 'Needs renewal'
+                      : 'Sync attention'}
+              </Text>
+
+              <StatusPill
+                label={`${filtered.length} SHOWN`}
+                toneName="neutral"
+              />
+            </View>
+          </>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color="#9CA3AF" />
-            <Text style={styles.emptyText}>No clients found</Text>
-            <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search' : 'Add your first client to get started'}
-            </Text>
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon={
+                searchQuery
+                  ? 'search-outline'
+                  : 'people-outline'
+              }
+              title={
+                searchQuery
+                  ? 'No matching members'
+                  : filter === 'renewal'
+                    ? 'No renewals waiting'
+                    : 'No members here'
+              }
+              body={
+                searchQuery
+                  ? 'Try a name, phone number or email.'
+                  : filter === 'all'
+                    ? 'Add the first member to start your directory.'
+                    : 'Change the filter to view another group.'
+              }
+            />
           </View>
         }
-        contentContainerStyle={styles.listContent}
       />
-
-      {/* Add Client FAB */}
-      <TouchableOpacity style={styles.fab} onPress={handleAddClient}>
-        <Ionicons name="add" size={24} color="white" />
-      </TouchableOpacity>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const styles = createAdaptiveStyles({
+  page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
-  centerContainer: {
+
+  listContent: {
+    paddingBottom: 34,
+  },
+
+  loading: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    backgroundColor: ui.color.canvas,
   },
-  searchContainer: {
+
+  loadingText: {
+    color: ui.color.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: ui.space.md,
+  },
+
+  hero: {
+    margin: ui.space.lg,
+    marginBottom: ui.space.md,
+    backgroundColor:
+      ui.color.brandStrong,
+    borderRadius: ui.radius.xl,
+    padding: ui.space.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    margin: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
+
+  heroCopy: {
+    flex: 1,
+    paddingRight: ui.space.md,
+  },
+
+  eyebrow: {
+    color: '#C7D2FE',
+    fontSize: ui.type.eyebrow,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: ui.type.page,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+
+  heroSubtitle: {
+    color: '#E0E7FF',
+    fontSize: ui.type.bodySm,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+
+  addButton: {
+    minHeight: ui.touch.min,
+    paddingHorizontal: ui.space.md,
+    borderRadius: ui.radius.md,
+    backgroundColor:
+      'rgba(255,255,255,0.14)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  errorBar: {
+    marginHorizontal: ui.space.lg,
+    marginBottom: ui.space.md,
+    minHeight: ui.touch.min,
+    backgroundColor:
+      ui.color.warningSoft,
+    borderWidth: 1,
+    borderColor:
+      ui.color.warningBorder,
+    borderRadius: ui.radius.md,
+    paddingHorizontal: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.sm,
+  },
+
+  errorText: {
+    flex: 1,
+    color: ui.color.warning,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  search: {
+    minHeight: 52,
+    marginHorizontal: ui.space.lg,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.md,
+    paddingHorizontal: ui.space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ui.space.sm,
+  },
+
   searchInput: {
     flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: '#1F2937',
+    color: ui.color.text,
+    fontSize: 13,
+    paddingVertical: 12,
   },
-  listContent: {
-    paddingBottom: 100,
-  },
-  emptyContainer: {
+
+  clearButton: {
+    width: ui.touch.min,
+    height: ui.touch.min,
     alignItems: 'center',
-    padding: 48,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#6366F1',
     justifyContent: 'center',
+    marginRight: -10,
+  },
+
+  filterRow: {
+    paddingHorizontal: ui.space.lg,
+    paddingTop: ui.space.md,
+    paddingBottom: ui.space.lg,
+    gap: ui.space.sm,
+  },
+
+  filterChip: {
+    minHeight: 40,
+    paddingHorizontal: 11,
+    borderRadius: ui.radius.pill,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: 7,
+  },
+
+  filterChipOn: {
+    backgroundColor:
+      ui.color.brandSoft,
+    borderColor:
+      ui.color.brandBorder,
+  },
+
+  filterText: {
+    color: ui.color.textSecondary,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  filterTextOn: {
+    color: ui.color.brand,
+  },
+
+  countBubble: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 5,
+    borderRadius: 11,
+    backgroundColor:
+      ui.color.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  countBubbleOn: {
+    backgroundColor: ui.color.surface,
+  },
+
+  countText: {
+    color: ui.color.textMuted,
+    fontSize: 8,
+    fontWeight: '900',
+  },
+
+  countTextOn: {
+    color: ui.color.brand,
+  },
+
+  resultHeader: {
+    marginHorizontal: ui.space.lg,
+    marginBottom: ui.space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  resultTitle: {
+    color: ui.color.text,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  emptyWrap: {
+    marginHorizontal: ui.space.lg,
+    marginTop: ui.space.sm,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.lg,
+    backgroundColor: ui.color.surface,
   },
 });
 

@@ -1,3 +1,5 @@
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import { ui } from '../ui/theme';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -332,7 +334,9 @@ const StaffManagementScreen: React.FC = () => {
             placeholder="staff@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
-          />
+          
+      placeholderTextColor={ui.color.textMuted}
+    />
 
           <Text style={styles.inputLabel}>Expires after</Text>
 
@@ -553,10 +557,10 @@ const StaffManagementScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createAdaptiveStyles({
   page: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
   content: {
     padding: 18,
@@ -566,17 +570,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     marginTop: 12,
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontWeight: '600',
   },
   hero: {
     borderRadius: 22,
     padding: 20,
-    backgroundColor: '#312E81',
+    backgroundColor: ui.color.brandStrong,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
@@ -613,15 +617,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   myAccessCard: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: ui.color.brandSoft,
     borderWidth: 1,
-    borderColor: '#C7D2FE',
+    borderColor: ui.color.brandBorder,
     borderRadius: 18,
     padding: 18,
     marginBottom: 16,
   },
   sectionEyebrow: {
-    color: '#6366F1',
+    color: ui.color.brand,
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1,
@@ -633,35 +637,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   permissionDescription: {
-    color: '#4F46E5',
+    color: ui.color.brand,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 4,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: ui.color.surface,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: ui.color.border,
     marginBottom: 16,
   },
   sectionHeader: {
     marginBottom: 16,
   },
   sectionTitle: {
-    color: '#0F172A',
+    color: ui.color.text,
     fontSize: 19,
     fontWeight: '800',
   },
   sectionSubtitle: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 4,
   },
   inputLabel: {
-    color: '#334155',
+    color: ui.color.textSecondary,
     fontSize: 12,
     fontWeight: '800',
     marginTop: 10,
@@ -673,8 +677,8 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    backgroundColor: '#F8FAFC',
-    color: '#0F172A',
+    backgroundColor: ui.color.canvas,
+    color: ui.color.text,
     fontSize: 15,
   },
   roleGrid: {
@@ -687,16 +691,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
   },
   roleChoiceText: {
-    color: '#475569',
+    color: ui.color.textSecondary,
     fontSize: 12,
     fontWeight: '800',
   },
   roleHelp: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 12,
     lineHeight: 18,
     marginTop: 10,
@@ -711,24 +715,24 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: ui.color.border,
   },
   expiryChoiceActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#6366F1',
+    backgroundColor: ui.color.brandSoft,
+    borderColor: ui.color.brand,
   },
   expiryText: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontWeight: '800',
   },
   expiryTextActive: {
-    color: '#4338CA',
+    color: ui.color.brand,
   },
   primaryButton: {
     marginTop: 18,
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: '#4F46E5',
+    backgroundColor: ui.color.brand,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -746,19 +750,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 15,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: ui.color.divider,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: ui.color.surfaceSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   avatarText: {
-    color: '#334155',
+    color: ui.color.textSecondary,
     fontSize: 17,
     fontWeight: '900',
   },
@@ -766,7 +770,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   staffEmail: {
-    color: '#0F172A',
+    color: ui.color.text,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -787,13 +791,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statusText: {
-    color: '#047857',
+    color: ui.color.success,
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'capitalize',
   },
   statusInactive: {
-    color: '#B91C1C',
+    color: ui.color.danger,
   },
   inlineActions: {
     flexDirection: 'row',
@@ -803,22 +807,22 @@ const styles = StyleSheet.create({
   },
   miniRole: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: ui.color.border,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 9,
   },
   miniRoleActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: ui.color.brandSoft,
     borderColor: '#818CF8',
   },
   miniRoleText: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 10,
     fontWeight: '700',
   },
   miniRoleTextActive: {
-    color: '#4338CA',
+    color: ui.color.brand,
   },
   deactivateButton: {
     flexDirection: 'row',
@@ -827,10 +831,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 9,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: ui.color.dangerSoft,
   },
   deactivateText: {
-    color: '#B91C1C',
+    color: ui.color.danger,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -838,19 +842,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: ui.color.divider,
     paddingVertical: 13,
   },
   inviteInfo: {
     flex: 1,
   },
   inviteTitle: {
-    color: '#0F172A',
+    color: ui.color.text,
     fontSize: 14,
     fontWeight: '800',
   },
   inviteMeta: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 11,
     marginTop: 3,
   },
@@ -859,21 +863,21 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   inviteStatus: {
-    color: '#64748B',
+    color: ui.color.textSecondary,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   invitePending: {
-    color: '#B45309',
+    color: ui.color.warning,
   },
   revokeText: {
-    color: '#B91C1C',
+    color: ui.color.danger,
     fontSize: 12,
     fontWeight: '800',
   },
   emptyText: {
-    color: '#94A3B8',
+    color: ui.color.textMuted,
     fontSize: 13,
   },
 });

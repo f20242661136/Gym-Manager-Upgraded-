@@ -39,6 +39,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          check_in_at: string
+          check_out_at: string | null
+          checked_out_by: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          membership_id: string | null
+          notes: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          check_in_at?: string
+          check_out_at?: string | null
+          checked_out_by?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          gym_id: string
+          id?: string
+          membership_id?: string | null
+          notes?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          check_in_at?: string
+          check_out_at?: string | null
+          checked_out_by?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          gym_id?: string
+          id?: string
+          membership_id?: string | null
+          notes?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -101,9 +168,12 @@ export type Database = {
           membership_status: string
           name: string
           phone: string | null
+          phone_e164: string | null
           photo_path: string | null
           photo_url: string | null
+          qr_token: string
           registration_date: string
+          sync_version: number
           updated_at: string
           waist: number | null
           weight: number | null
@@ -122,9 +192,12 @@ export type Database = {
           membership_status?: string
           name: string
           phone?: string | null
+          phone_e164?: string | null
           photo_path?: string | null
           photo_url?: string | null
+          qr_token?: string
           registration_date?: string
+          sync_version?: number
           updated_at?: string
           waist?: number | null
           weight?: number | null
@@ -143,9 +216,12 @@ export type Database = {
           membership_status?: string
           name?: string
           phone?: string | null
+          phone_e164?: string | null
           photo_path?: string | null
           photo_url?: string | null
+          qr_token?: string
           registration_date?: string
+          sync_version?: number
           updated_at?: string
           waist?: number | null
           weight?: number | null
@@ -165,34 +241,55 @@ export type Database = {
           amount: number
           category: string | null
           created_at: string
+          created_by: string | null
           description: string
           expense_date: string
           gym_id: string
           id: string
           notes: string | null
+          payment_method: string
+          reference_number: string | null
+          status: string
           updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           amount: number
           category?: string | null
           created_at?: string
+          created_by?: string | null
           description: string
           expense_date?: string
           gym_id: string
           id?: string
           notes?: string | null
+          payment_method?: string
+          reference_number?: string | null
+          status?: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           amount?: number
           category?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string
           expense_date?: string
           gym_id?: string
           id?: string
           notes?: string | null
+          payment_method?: string
+          reference_number?: string | null
+          status?: string
           updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -249,6 +346,32 @@ export type Database = {
             foreignKeyName: "gym_invitations_gym_id_fkey"
             columns: ["gym_id"]
             isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_receipt_counters: {
+        Row: {
+          gym_id: string
+          next_number: number
+          updated_at: string
+        }
+        Insert: {
+          gym_id: string
+          next_number?: number
+          updated_at?: string
+        }
+        Update: {
+          gym_id?: string
+          next_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_receipt_counters_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: true
             referencedRelation: "gyms"
             referencedColumns: ["id"]
           },
@@ -348,34 +471,58 @@ export type Database = {
       }
       memberships: {
         Row: {
+          admission_fee: number
           client_id: string
           created_at: string
+          created_by: string | null
+          discount_amount: number
           end_date: string
+          freeze_reason: string | null
+          frozen_at: string | null
           gym_id: string
           id: string
+          notes: string | null
+          payment_id: string | null
           plan_id: string | null
+          price_snapshot: number
           start_date: string
           status: string
           updated_at: string
         }
         Insert: {
+          admission_fee?: number
           client_id: string
           created_at?: string
+          created_by?: string | null
+          discount_amount?: number
           end_date?: string
+          freeze_reason?: string | null
+          frozen_at?: string | null
           gym_id: string
           id?: string
+          notes?: string | null
+          payment_id?: string | null
           plan_id?: string | null
+          price_snapshot?: number
           start_date?: string
           status?: string
           updated_at?: string
         }
         Update: {
+          admission_fee?: number
           client_id?: string
           created_at?: string
+          created_by?: string | null
+          discount_amount?: number
           end_date?: string
+          freeze_reason?: string | null
+          frozen_at?: string | null
           gym_id?: string
           id?: string
+          notes?: string | null
+          payment_id?: string | null
           plan_id?: string | null
+          price_snapshot?: number
           start_date?: string
           status?: string
           updated_at?: string
@@ -395,23 +542,87 @@ export type Database = {
             referencedRelation: "gyms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "memberships_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offline_mutation_log: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          gym_id: string
+          id: string
+          idempotency_key: string
+          operation: string
+          result: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          gym_id: string
+          id?: string
+          idempotency_key: string
+          operation: string
+          result?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          gym_id?: string
+          id?: string
+          idempotency_key?: string
+          operation?: string
+          result?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offline_mutation_log_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payments: {
         Row: {
+          admission_fee: number
           amount: number
           client_id: string
           client_name: string
           created_at: string
+          created_by: string | null
+          discount_amount: number
           due_date: string | null
           duration: number
           gym_id: string
           id: string
           idempotency_key: string | null
+          membership_id: string | null
           notes: string | null
           payment_date: string
           payment_method: string
+          plan_id: string | null
           provider_transaction_id: string | null
+          receipt_number: string | null
           reference_number: string | null
           status: string
           updated_at: string
@@ -420,19 +631,25 @@ export type Database = {
           voided_by: string | null
         }
         Insert: {
+          admission_fee?: number
           amount: number
           client_id: string
           client_name: string
           created_at?: string
+          created_by?: string | null
+          discount_amount?: number
           due_date?: string | null
           duration?: number
           gym_id: string
           id?: string
           idempotency_key?: string | null
+          membership_id?: string | null
           notes?: string | null
           payment_date?: string
           payment_method?: string
+          plan_id?: string | null
           provider_transaction_id?: string | null
+          receipt_number?: string | null
           reference_number?: string | null
           status?: string
           updated_at?: string
@@ -441,19 +658,25 @@ export type Database = {
           voided_by?: string | null
         }
         Update: {
+          admission_fee?: number
           amount?: number
           client_id?: string
           client_name?: string
           created_at?: string
+          created_by?: string | null
+          discount_amount?: number
           due_date?: string | null
           duration?: number
           gym_id?: string
           id?: string
           idempotency_key?: string | null
+          membership_id?: string | null
           notes?: string | null
           payment_date?: string
           payment_method?: string
+          plan_id?: string | null
           provider_transaction_id?: string | null
+          receipt_number?: string | null
           reference_number?: string | null
           status?: string
           updated_at?: string
@@ -476,35 +699,58 @@ export type Database = {
             referencedRelation: "gyms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payments_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
         ]
       }
       plans: {
         Row: {
+          admission_fee: number
           created_at: string
+          created_by: string | null
           description: string | null
           duration_days: number
           gym_id: string
           id: string
+          is_active: boolean
           name: string
           price: number
           updated_at: string
         }
         Insert: {
+          admission_fee?: number
           created_at?: string
+          created_by?: string | null
           description?: string | null
           duration_days: number
           gym_id: string
           id?: string
+          is_active?: boolean
           name: string
           price: number
           updated_at?: string
         }
         Update: {
+          admission_fee?: number
           created_at?: string
+          created_by?: string | null
           description?: string | null
           duration_days?: number
           gym_id?: string
           id?: string
+          is_active?: boolean
           name?: string
           price?: number
           updated_at?: string
@@ -525,6 +771,26 @@ export type Database = {
     }
     Functions: {
       accept_staff_invitation: { Args: { p_code: string }; Returns: Json }
+      apply_client_mutation: {
+        Args: {
+          p_client_id: string
+          p_expected_version: number
+          p_gym_id: string
+          p_idempotency_key: string
+          p_operation: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
+      check_in_by_qr: {
+        Args: { p_gym_id: string; p_qr_token: string }
+        Returns: Json
+      }
+      check_in_client: {
+        Args: { p_client_id: string; p_gym_id: string; p_source?: string }
+        Returns: Json
+      }
+      check_out_attendance: { Args: { p_attendance_id: string }; Returns: Json }
       create_gym: {
         Args: {
           p_address?: string
@@ -550,7 +816,36 @@ export type Database = {
         Args: { p_gym_user_id: string }
         Returns: undefined
       }
+      freeze_membership: {
+        Args: { p_membership_id: string; p_reason?: string }
+        Returns: Json
+      }
+      get_attendance_summary: { Args: { p_gym_id: string }; Returns: Json }
+      get_checkin_membership: {
+        Args: { p_client_id: string; p_gym_id: string }
+        Returns: string
+      }
+      get_client_attendance_history: {
+        Args: { p_client_id: string; p_gym_id: string; p_limit?: number }
+        Returns: Json
+      }
+      get_client_memberships: {
+        Args: { p_client_id: string; p_gym_id: string }
+        Returns: Json
+      }
+      get_finance_monthly_trend: {
+        Args: { p_gym_id: string; p_months?: number }
+        Returns: Json
+      }
+      get_finance_summary: {
+        Args: { p_from: string; p_gym_id: string; p_to: string }
+        Returns: Json
+      }
       get_my_gym_role: { Args: { p_gym_id: string }; Returns: string }
+      get_payment_receipt: {
+        Args: { p_gym_id: string; p_payment_id: string }
+        Returns: Json
+      }
       get_user_gym_ids: {
         Args: never
         Returns: {
@@ -566,15 +861,86 @@ export type Database = {
         Args: { p_gym_id: string; p_limit?: number }
         Returns: Json
       }
+      list_expenses: {
+        Args: { p_gym_id: string; p_include_voided?: boolean }
+        Returns: Json
+      }
       list_gym_staff: { Args: { p_gym_id: string }; Returns: Json }
+      list_membership_plans: {
+        Args: { p_gym_id: string; p_include_inactive?: boolean }
+        Returns: Json
+      }
+      list_payment_receipts: {
+        Args: { p_client_id?: string; p_gym_id: string }
+        Returns: Json
+      }
+      list_renewals_due: {
+        Args: { p_gym_id: string; p_limit?: number }
+        Returns: Json
+      }
       list_staff_invitations: { Args: { p_gym_id: string }; Returns: Json }
+      list_today_attendance: { Args: { p_gym_id: string }; Returns: Json }
+      normalize_phone_e164: {
+        Args: { p_country_code: string; p_phone: string }
+        Returns: string
+      }
+      record_membership_payment: {
+        Args: {
+          p_apply_admission_fee?: boolean
+          p_client_id: string
+          p_discount_amount?: number
+          p_gym_id: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_payment_method: string
+          p_plan_id: string
+          p_reference_number?: string
+        }
+        Returns: Json
+      }
+      resume_membership: { Args: { p_membership_id: string }; Returns: Json }
       revoke_staff_invitation: {
         Args: { p_invitation_id: string }
         Returns: undefined
       }
+      save_expense: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_description: string
+          p_expense_date: string
+          p_expense_id: string
+          p_gym_id: string
+          p_notes?: string
+          p_payment_method?: string
+          p_reference_number?: string
+        }
+        Returns: Json
+      }
+      save_membership_plan: {
+        Args: {
+          p_admission_fee?: number
+          p_description?: string
+          p_duration_days: number
+          p_gym_id: string
+          p_is_active?: boolean
+          p_name: string
+          p_plan_id: string
+          p_price: number
+        }
+        Returns: Json
+      }
+      search_attendance_clients: {
+        Args: { p_gym_id: string; p_query?: string }
+        Returns: Json
+      }
       update_staff_role: {
         Args: { p_gym_user_id: string; p_role: string }
         Returns: undefined
+      }
+      void_expense: {
+        Args: { p_expense_id: string; p_reason: string }
+        Returns: Json
       }
       void_payment: {
         Args: { p_payment_id: string; p_reason: string }

@@ -1,0 +1,34 @@
+STAB-1 HEALTH REPORT
+Generated: 2026-09-25 16:29:13 +05:00
+
+SOURCE HEALTH
+PASS - TypeScript
+PASS - STAB-1 notification source compiles
+PASS - atomic payment path verified in previous STAB-1 repair
+
+LOCAL MIGRATIONS
+LOCAL 006: PRESENT - 006_expenses_finance_dashboard.sql
+LOCAL 007: PRESENT - 007_receipts_phone_whatsapp.sql
+LOCAL 008: PRESENT - 008_offline_sync_idempotency.sql
+
+REMOTE MIGRATION CHECK
+Command: npx supabase migration list
+Exit code: 0
+
+npm notice run gymmanagementapp@1.0.0 npx
+npm notice run supabase migration list
+Initialising login role...
+Connecting to remote database...
+
+  
+   Local | Remote | Time (UTC) 
+  -------|--------|------------
+   `001` | `001`  | `001`      
+   `002` | `002`  | `002`      
+   `003` | `003`  | `003`      
+   `004` | `004`  | `004`      
+   `005` | `005`  | `005`      
+   `006` | `006`  | `006`      
+   `007` | `007`  | `007`      
+   `008` | `008`  | `008`      
+

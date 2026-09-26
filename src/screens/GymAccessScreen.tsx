@@ -1,3 +1,5 @@
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import { ui } from '../ui/theme';
 import React from 'react';
 import {
   View,
@@ -89,11 +91,11 @@ const GymAccessScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createAdaptiveStyles({
   container: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: ui.color.canvas,
     paddingHorizontal: 24,
   },
   header: {
@@ -104,13 +106,13 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: ui.color.brandSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
   },
   title: {
-    color: '#111827',
+    color: ui.color.text,
     fontSize: 28,
     fontWeight: '800',
     textAlign: 'center',
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
   primaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4F46E5',
+    backgroundColor: ui.color.brand,
     padding: 18,
     borderRadius: 16,
     marginBottom: 14,
@@ -133,11 +135,11 @@ const styles = StyleSheet.create({
   secondaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: ui.color.surface,
     padding: 18,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: ui.color.border,
   },
   iconContainer: {
     width: 50,
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 14,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: ui.color.brandSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -172,7 +174,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   secondaryTitle: {
-    color: '#111827',
+    color: ui.color.text,
     fontSize: 17,
     fontWeight: '800',
     marginBottom: 4,
