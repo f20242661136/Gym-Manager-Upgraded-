@@ -102,6 +102,39 @@ const tone = {
   }
 >;
 
+const getTone = () => ({
+  ...tone,
+
+  neutral: {
+    bg: ui.color.surfaceSubtle,
+    fg: ui.color.textSecondary,
+    border: ui.color.border,
+  },
+
+  brand: {
+    bg: ui.color.brandSoft,
+    fg: ui.color.brand,
+    border: ui.color.brand,
+  },
+
+  success: {
+    bg: ui.color.surfaceSubtle,
+    fg: ui.color.success,
+    border: ui.color.success,
+  },
+
+  warning: {
+    bg: ui.color.surfaceSubtle,
+    fg: ui.color.warning,
+    border: ui.color.warning,
+  },
+
+  danger: {
+    bg: ui.color.surfaceSubtle,
+    fg: ui.color.danger,
+    border: ui.color.danger,
+  },
+});
 export const StatusPill = ({
   label,
   toneName = 'neutral',
@@ -109,7 +142,7 @@ export const StatusPill = ({
   label: string;
   toneName?: Tone;
 }) => {
-  const colors = tone[toneName];
+  const colors = getTone()[toneName];
 
   return (
     <View accessible accessibilityLabel={'Status: ' + label} style={[styles.pill,
@@ -144,7 +177,7 @@ export const MetricCard = ({
   helper?: string;
   toneName?: Tone;
 }) => {
-  const colors = tone[toneName];
+  const colors = getTone()[toneName];
 
   return (
     <SurfaceCard style={styles.metricCard}>
@@ -191,7 +224,7 @@ export const QuickAction = ({
   toneName?: Tone;
   onPress: () => void;
 }) => {
-  const colors = tone[toneName];
+  const colors = getTone()[toneName];
 
   return (
     <TouchableOpacity

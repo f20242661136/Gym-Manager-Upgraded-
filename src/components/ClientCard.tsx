@@ -1,15 +1,15 @@
-import { createAdaptiveStyles } from '../ui/adaptiveStyles';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  View,
   Text,
-  StyleSheet,
   TouchableOpacity,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import type { Client } from '../types';
+import { createAdaptiveStyles } from '../ui/adaptiveStyles';
 import { StatusPill } from '../ui/components';
-import { ui, shadow } from '../ui/theme';
+import { shadow, ui } from '../ui/theme';
+import ClientAvatar from './ClientAvatar';
 
 interface ClientCardProps {
   client: Client;
@@ -32,6 +32,7 @@ const ClientCard:
       : 'No due date';
 
   return (
+    
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`Open ${client.name}`}
@@ -40,11 +41,16 @@ const ClientCard:
       onPress={onPress}
     >
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
+        <ClientAvatar
+  name={client.name}
+  photoUrl={client.photoUrl}
+  size={52}
+/>
+        {/* <Text style={styles.avatarText}>
           {client.name
             .slice(0, 1)
             .toUpperCase()}
-        </Text>
+        </Text> */}
       </View>
 
       <View style={styles.copy}>
