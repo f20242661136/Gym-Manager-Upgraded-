@@ -337,16 +337,16 @@ const styles = createAdaptiveStyles({
   },
   metricCard: {
     flex: 1,
-    minHeight: 139,
-    padding: ui.space.lg,
+    minHeight: 112,
+    padding: ui.space.md,
   },
   metricIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: ui.space.md,
+    marginBottom: ui.space.sm,
   },
   metricLabel: {
     color: ui.color.textSecondary,

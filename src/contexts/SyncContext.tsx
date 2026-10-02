@@ -74,6 +74,7 @@ export const SyncProvider: React.FC<{
     );
 
   const running = useRef(false);
+  const connectedRef = useRef(true);
 
   const refreshQueue =
     useCallback(async () => {
@@ -101,7 +102,7 @@ export const SyncProvider: React.FC<{
     useCallback(async () => {
       if (
         running.current ||
-        !isConnected ||
+        !connectedRef.current ||
         !user?.id ||
         !activeGymId
       ) {
@@ -134,7 +135,6 @@ export const SyncProvider: React.FC<{
       }
     }, [
       activeGymId,
-      isConnected,
       user?.id,
     ]);
 
@@ -211,6 +211,7 @@ export const SyncProvider: React.FC<{
                   false
             );
 
+          connectedRef.current = connected;
           setConnected(connected);
 
           if (!connected) {
@@ -234,7 +235,7 @@ export const SyncProvider: React.FC<{
         nextState => {
           if (
             nextState === 'active' &&
-            isConnected
+            connectedRef.current
           ) {
             syncNow().catch(() => {});
           }

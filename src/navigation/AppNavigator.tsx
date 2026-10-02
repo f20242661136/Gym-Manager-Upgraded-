@@ -93,11 +93,31 @@ const withLiveRefresh = (
     const isFocused =
       useIsFocused();
 
+    const [
+      appliedRevision,
+      setAppliedRevision,
+    ] = React.useState(
+      revision
+    );
+
+    React.useEffect(() => {
+      if (
+        isFocused &&
+        appliedRevision !== revision
+      ) {
+        setAppliedRevision(
+          revision
+        );
+      }
+    }, [
+      appliedRevision,
+      isFocused,
+      revision,
+    ]);
+
     return (
       <Component
-        key={
-          `${revision}-${isFocused ? 'focused' : 'blurred'}`
-        }
+        key={`live-${appliedRevision}`}
         {...props}
       />
     );

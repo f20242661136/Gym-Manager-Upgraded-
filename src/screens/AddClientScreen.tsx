@@ -29,6 +29,7 @@ import {
   takePhoto,
 } from '../utils/imagePicker';
 import { useNetworkStatus } from '../hook/useNetworkStatus';
+import { useLiveData } from '../contexts/LiveDataContext';
 import {
   SectionHeader,
   StatusPill,
@@ -65,6 +66,45 @@ const AddClientScreen: React.FC = () => {
 
   const isConnected =
     useNetworkStatus();
+
+  const {
+    refreshNow,
+  } = useLiveData();
+
+  const returnFromForm = () => {
+    if (
+      isEditing &&
+      navigation.canGoBack?.()
+    ) {
+      navigation.goBack();
+      return;
+    }
+
+    const state =
+      navigation.getState?.();
+
+    const hasClientsList =
+      state?.routes?.some(
+        (item: any) =>
+          item.name ===
+          'ClientsList'
+      );
+
+    if (
+      hasClientsList &&
+      typeof navigation.popTo ===
+        'function'
+    ) {
+      navigation.popTo(
+        'ClientsList'
+      );
+      return;
+    }
+
+    navigation.navigate(
+      'ClientsList'
+    );
+  };
 
   const [isLoading, setIsLoading] =
     useState(false);
@@ -437,6 +477,8 @@ const AddClientScreen: React.FC = () => {
           );
       }
 
+      refreshNow();
+
       const offline =
         result.syncState ===
         'pending';
@@ -469,8 +511,8 @@ const AddClientScreen: React.FC = () => {
         [
           {
             text: 'Done',
-            onPress: () =>
-              navigation.goBack(),
+            onPress:
+              returnFromForm,
           },
         ]
       );
@@ -513,8 +555,8 @@ const AddClientScreen: React.FC = () => {
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              onPress={() =>
-                navigation.goBack()
+              onPress={
+                returnFromForm
               }
               style={
                 styles.backButton

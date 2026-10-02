@@ -13,12 +13,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import { api } from '../services/api';
+import { storage } from '../services/storage';
 import { useGym } from '../contexts/GymContext';
 import type {
   DashboardStats,
@@ -34,12 +34,10 @@ import {
   SurfaceCard,
 } from '../ui/components';
 import { ui } from '../ui/theme';
-
+import ClientAvatar from '../components/ClientAvatar';
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { activeGym } = useGym();
-  const { width, fontScale } = useWindowDimensions();
-  const compactMetrics = width < 390 || fontScale >= 1.25;
 
   const [stats, setStats] =
     useState<DashboardStats>({
@@ -96,7 +94,94 @@ const DashboardScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    load();
+    let mounted = true;
+
+    const hydrateThenRefresh =
+      async () => {
+        try {
+          const [
+            cachedClients,
+            cachedPayments,
+          ] = await Promise.all([
+            storage.getClients(),
+            storage.getPayments(),
+          ]);
+
+          if (
+            mounted &&
+            (
+              cachedClients.length > 0 ||
+              cachedPayments.length > 0
+            )
+          ) {
+            const sortedClients =
+              [...cachedClients].sort(
+                (a, b) =>
+                  new Date(
+                    b.registrationDate
+                  ).getTime() -
+                  new Date(
+                    a.registrationDate
+                  ).getTime()
+              );
+
+            const sortedPayments =
+              [...cachedPayments].sort(
+                (a, b) =>
+                  new Date(
+                    b.paymentDate
+                  ).getTime() -
+                  new Date(
+                    a.paymentDate
+                  ).getTime()
+              );
+
+            setStats({
+              totalClients:
+                cachedClients.length,
+              paidClients:
+                cachedClients.filter(
+                  client =>
+                    client
+                      .membershipStatus ===
+                    'Paid'
+                ).length,
+              unpaidClients:
+                cachedClients.filter(
+                  client =>
+                    client
+                      .membershipStatus ===
+                    'Unpaid'
+                ).length,
+            });
+
+            setRecentClients(
+              sortedClients.slice(0, 5)
+            );
+
+            setRecentPayments(
+              sortedPayments.slice(0, 5)
+            );
+
+            setIsLoading(false);
+          }
+        } catch (cacheError) {
+          console.warn(
+            'Dashboard cache hydrate failed:',
+            cacheError
+          );
+        }
+
+        if (mounted) {
+          await load();
+        }
+      };
+
+    hydrateThenRefresh();
+
+    return () => {
+      mounted = false;
+    };
   }, [load]);
 
   const completion = useMemo(() => {
@@ -210,12 +295,7 @@ const DashboardScreen: React.FC = () => {
         </TouchableOpacity>
       ) : null}
 
-      <View
-        style={[
-          styles.metricGrid,
-          compactMetrics && styles.metricGridCompact,
-        ]}
-      >
+      <View style={styles.metricGrid}>
         <MetricCard
           icon="people-outline"
           label="Members"
@@ -260,7 +340,10 @@ const DashboardScreen: React.FC = () => {
             onPress={() =>
               navigation.navigate(
                 'Clients',
-                { screen: 'AddClient' }
+                {
+                  screen: 'AddClient',
+                  initial: false,
+                }
               )
             }
           />
@@ -347,11 +430,10 @@ const DashboardScreen: React.FC = () => {
                   }
                 >
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {client.name
-                        .slice(0, 1)
-                        .toUpperCase()}
-                    </Text>
+                    <ClientAvatar
+                      name={client.name}
+                      photoUrl={client.photoUrl}
+                    />
                   </View>
 
                   <View style={styles.activityCopy}>
@@ -584,9 +666,6 @@ const styles = createAdaptiveStyles({
     marginBottom: ui.space.xl,
   },
 
-  metricGridCompact: {
-    flexDirection: 'column',
-  },
   section: {
     marginBottom: ui.space.xl,
   },

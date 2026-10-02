@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { api } from '../services/api';
+import { storage } from '../services/storage';
 import type { Client } from '../types';
 import ClientCard from '../components/ClientCard';
 import {
@@ -98,7 +99,38 @@ const ClientsScreen: React.FC<{
     }, []);
 
   useEffect(() => {
-    loadClients();
+    let mounted = true;
+
+    const hydrateThenRefresh =
+      async () => {
+        try {
+          const cached =
+            await storage.getClients();
+
+          if (
+            mounted &&
+            cached.length > 0
+          ) {
+            setClients(cached);
+            setIsLoading(false);
+          }
+        } catch (cacheError) {
+          console.warn(
+            'Member cache hydrate failed:',
+            cacheError
+          );
+        }
+
+        if (mounted) {
+          await loadClients();
+        }
+      };
+
+    hydrateThenRefresh();
+
+    return () => {
+      mounted = false;
+    };
   }, [loadClients]);
 
   const counts = useMemo(() => {

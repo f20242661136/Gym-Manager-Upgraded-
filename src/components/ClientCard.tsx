@@ -157,6 +157,15 @@ const styles = createAdaptiveStyles({
     alignItems: 'center',
     gap: ui.space.xs,
   },
+  identityRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+
+identityCopy: {
+  flex: 1,
+},
   name: {
     flexShrink: 1,
     color: ui.color.text,

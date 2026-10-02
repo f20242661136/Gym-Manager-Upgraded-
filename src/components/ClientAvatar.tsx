@@ -1,8 +1,4 @@
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -10,7 +6,7 @@ import {
   View,
 } from 'react-native';
 
-import { useAppearanceTheme } from '../theme/appearance';
+import { ui } from '../ui/theme';
 
 type ClientAvatarProps = {
   name?: string | null;
@@ -18,10 +14,8 @@ type ClientAvatarProps = {
   size?: number;
 };
 
-const getInitials = (
-  name?: string | null
-) => {
-  const parts = String(name || '')
+const getInitials = (name?: string | null): string => {
+  const parts = String(name ?? '')
     .trim()
     .split(/\s+/)
     .filter(Boolean);
@@ -31,71 +25,44 @@ const getInitials = (
   }
 
   if (parts.length === 1) {
-    return parts[0]
-      .slice(0, 2)
-      .toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
   }
 
-  return (
-    parts[0][0] +
-    parts[parts.length - 1][0]
-  ).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
-const ClientAvatar: React.FC<
-  ClientAvatarProps
-> = ({
+const ClientAvatar: React.FC<ClientAvatarProps> = ({
   name,
   photoUrl,
   size = 48,
 }) => {
-  const theme =
-    useAppearanceTheme();
-
-  const [imageFailed, setImageFailed] =
-    useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     setImageFailed(false);
   }, [photoUrl]);
 
-  const validPhoto =
-    useMemo(() => {
-      const value =
-        photoUrl?.trim();
+  const uri = useMemo(() => {
+    const value = photoUrl?.trim();
+    return value || null;
+  }, [photoUrl]);
 
-      return value
-        ? value
-        : null;
-    }, [photoUrl]);
+  const radius = size / 2;
 
-  const radius =
-    Math.round(size / 2);
-
-  if (
-    validPhoto &&
-    !imageFailed
-  ) {
+  if (uri && !imageFailed) {
     return (
       <Image
-        source={{
-          uri: validPhoto,
-        }}
+        source={{ uri }}
         resizeMode="cover"
+        onError={() => setImageFailed(true)}
         accessibilityLabel={
-          name
-            ? `${name} profile photo`
-            : 'Member profile photo'
-        }
-        onError={() =>
-          setImageFailed(true)
+          name ? `${name} profile photo` : 'Member profile photo'
         }
         style={{
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor:
-            theme.colors.surfaceSubtle,
+          backgroundColor: ui.color.surfaceSubtle,
         }}
       />
     );
@@ -103,21 +70,14 @@ const ClientAvatar: React.FC<
 
   return (
     <View
-      accessibilityLabel={
-        name
-          ? `${name} profile placeholder`
-          : 'Member profile placeholder'
-      }
       style={[
         styles.fallback,
         {
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor:
-            theme.colors.brandSoft,
-          borderColor:
-            theme.colors.border,
+          backgroundColor: ui.color.brandSoft,
+          borderColor: ui.color.border,
         },
       ]}
     >
@@ -125,15 +85,8 @@ const ClientAvatar: React.FC<
         style={[
           styles.initials,
           {
-            color:
-              theme.colors.brand,
-            fontSize:
-              Math.max(
-                12,
-                Math.round(
-                  size * 0.32
-                )
-              ),
+            color: ui.color.brand,
+            fontSize: Math.max(12, Math.round(size * 0.31)),
           },
         ]}
       >
@@ -143,19 +96,17 @@ const ClientAvatar: React.FC<
   );
 };
 
-const styles =
-  StyleSheet.create({
-    fallback: {
-      borderWidth: 1,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      overflow: 'hidden',
-    },
+const styles = StyleSheet.create({
+  fallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
 
-    initials: {
-      fontWeight: '900',
-    },
-  });
+  initials: {
+    fontWeight: '900',
+  },
+});
 
 export default ClientAvatar;
